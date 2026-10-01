@@ -1,0 +1,24 @@
+import { spawnSync, spawn } from 'node:child_process';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+const root = resolve('.');
+const home = resolve('.dev/harness');
+const bin = resolve('node_modules/@deepseek-ai/dsh/lib/bin.js');
+const env = { ...process.env, DSH_HOME: home };
+const profile = 'catpaw-dev';
+const run = args => {
+  const result = spawnSync(process.execPath, [bin, ...args], { env, stdio: ['inherit', 'pipe', 'inherit'] });
+  if (result.status !== 0) throw new Error(`dsh ${args.join(' ')} failed`);
+};
+await mkdir('.dev', { recursive: true });
+const manifestPath = resolve(home, 'profiles', profile, 'package.json');
+if (!existsSync(manifestPath)) run(['--profile', profile, '--from-default-profile', 'web', '--dump-config']);
+const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+if (!manifest.dependencies?.['dsh-catpaw']) run(['plugin', '--profile', profile, 'add', root]);
+const patchPath = resolve('.dev/catpaw.patch.yml');
+await writeFile(patchPath, `- id: catpaw\n  config:\n    dataDir: ${JSON.stringify(resolve('.dev/reader-data'))}\n    disableScheduler: true\n    allowAgentWrites: false\n`);
+const child = spawn(process.execPath, [bin, '--profile', profile, '--patch', patchPath, '--no-open', '--port', process.env.CATPAW_DEV_PORT ?? '19393'], { env, stdio: 'inherit' });
+process.on('SIGINT', () => child.kill('SIGINT'));
+process.on('SIGTERM', () => child.kill('SIGTERM'));
+child.on('exit', code => process.exit(code ?? 0));

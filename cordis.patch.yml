@@ -1,0 +1,5 @@
+- insert:
+    - id: catpaw
+      name: dsh-catpaw
+      config:
+        allowAgentWrites: false

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.dev/
+.generated/
+output/
+.DS_Store
+*.log
+.playwright-cli/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.pem
+*.key

@@ -1,0 +1,8 @@
+.detail-icon-button.translation-active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-soft-border); }
+.detail-icon-button.translation-pending { color: var(--accent); }
+.article-translation-status { margin: 18px 0 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.article-translation-status-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; }
+.article-translation-actions { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.article-translation-error { color: var(--danger); }
+.article-translation-status button { flex-shrink: 0; padding: 4px 6px; background: transparent; border: none; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; font: inherit; cursor: pointer; }
+.detail-thread-translated { white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0; }

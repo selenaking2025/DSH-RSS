@@ -1,0 +1,5 @@
+.modal-card.model-settings-modal { width: min(540px, 92vw); }
+.model-settings-heading h2 { margin: 0; font-size: 18px; }
+.model-settings-heading p, .model-settings-help p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.model-settings-modal .modal-row { align-items: center; }
+.model-settings-help .modal-button { margin-top: 12px; }
