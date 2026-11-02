@@ -19,11 +19,18 @@ export const INVOKE_METHODS = [
   "translateArticle",
   "cancelArticleTranslation",
   "listModelProviders",
+  "getModelUsage",
+  "setModelDailyTokenLimit",
   "saveModelProvider",
   "removeModelProvider",
   "discoverProviderModels",
   "getAppStatus",
   "backupDatabase",
+  "getAutomaticBackupStatus",
+  "setAutomaticBackupEnabled",
+  "chooseAutomaticBackupDirectory",
+  "resetAutomaticBackupDirectory",
+  "runAutomaticBackup",
   "restoreDatabase",
   "exportDiagnostics",
   "rebuildSearchIndex",
@@ -55,6 +62,7 @@ export const INVOKE_METHODS = [
   "fetchEntryContent",
   "resolveXiaoyuzhouAudio",
   "openWeChatLogin",
+  "verifyLinuxDo",
   "getSocialThread",
   "getArticleSummary",
   "cancelArticleSummary",
@@ -75,4 +83,4 @@ export const INVOKE_METHODS = [
   "importOpml",
   "exportOpml"
 ] as const;
-export const EVENT_METHODS = { onStateChanged: 'rss:stateChanged', onReadingChanged: 'rss:readingChanged', onTranslationProgress: 'rss:translationProgress', onUpdateStatusChanged: 'rss:updateStatusChanged' } as const;
+export const EVENT_METHODS = {"onStateChanged":"rss:stateChanged","onReadingChanged":"rss:readingChanged","onTranslationProgress":"rss:translationProgress","onUpdateStatusChanged":"rss:updateStatusChanged"} as const;

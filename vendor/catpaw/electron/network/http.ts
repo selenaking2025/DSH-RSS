@@ -32,7 +32,7 @@ export function withRequestBudget<T>(budget: RequestBudget, task: () => T): T {
   }, task);
 }
 
-type BoundedRequestInit = RequestInit & { maxBytes?: number };
+type BoundedRequestInit = RequestInit & { maxBytes?: number; bypassProxy?: boolean };
 function parseNoProxyRules() {
   const raw = process.env.NO_PROXY || process.env.no_proxy || '';
   return raw
@@ -397,14 +397,14 @@ function redirectInit(from: string, to: string, init?: RequestInit): RequestInit
 
 async function fetchViaProxyRequest(
   url: string,
-  init: RequestInit | undefined,
+  init: BoundedRequestInit | undefined,
   signal: AbortSignal,
 ): Promise<Response> {
   const parsed = new URL(url);
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('UNSUPPORTED_URL_PROTOCOL');
   const requestHeaders = new Headers(init?.headers ?? undefined);
   const requestModule = parsed.protocol === 'http:' ? http : https;
-  const proxyUrl = getProxyUrlForRequest(url);
+  const proxyUrl = init?.bypassProxy ? null : getProxyUrlForRequest(url);
   if (proxyUrl && isSocks5ProxyUrl(proxyUrl)) {
     const socket = await connectViaSocks5Proxy(url, proxyUrl, signal);
     try {
@@ -490,7 +490,7 @@ async function fetchViaProxyRequest(
     } finally { await destroySocket(socket); }
   }
 
-  const agent = getProxyAgent(url);
+  const agent = init?.bypassProxy ? null : getProxyAgent(url);
   if (!agent) {
     const response = await fetch(url, { ...init, headers: requestHeaders, signal, redirect: 'manual' });
     return response;

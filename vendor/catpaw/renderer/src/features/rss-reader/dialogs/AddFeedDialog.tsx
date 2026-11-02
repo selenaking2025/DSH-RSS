@@ -4,11 +4,13 @@ import { inferPrimaryGroupName } from '../utils';
 import type { FeedRunDiagnostic, SourceEndpointHealth, XApiFallbackStatus } from '../types';
 import { useDialogFeedback } from './feedback';
 import type { DialogProps, OpmlPreviewState, FeedDiscoveryCandidate } from './types';
+import { LinuxDoVerification } from '../LinuxDoVerification';
+import { useRequestScope } from '../useRequestScope';
 
 export function AddFeedDialog(props: DialogProps['add']) {
 const { aiNewsGroupId, primaryGroupIdByName, groupOptions } = props;
-const { onClose, onChanged, notify } = props;
-const { reportError, clearError, error } = useDialogFeedback(notify);
+const { onClose, onChanged } = props;
+const { reportError, clearError, error } = useDialogFeedback();
 const [newFeedUrl, setNewFeedUrl] = useState('');
 const [newFeedName, setNewFeedName] = useState('');
 const [newFeedFolderId, setNewFeedFolderId] = useState<string | null>(null);
@@ -17,12 +19,15 @@ const [feedDiscoveryCandidates, setFeedDiscoveryCandidates] = useState<FeedDisco
 const [selectedFeedCandidateUrl, setSelectedFeedCandidateUrl] = useState<string | null>(null);
 const [discoveringFeed, setDiscoveringFeed] = useState(false);
 const [addingFeed, setAddingFeed] = useState(false);
+const beginDiscovery = useRequestScope(newFeedUrl);
 const handleDiscoverNewFeed = async () => {
     if (!window.catpaw || !newFeedUrl.trim() || discoveringFeed) return;
     setDiscoveringFeed(true);
+    const current = beginDiscovery();
     clearError();
     try {
       const result = await window.catpaw.rss.discoverFeeds(newFeedUrl.trim());
+      if (!current()) return;
       if (!result.ok) {
         reportError('查找订阅源失败', result.error);
         return;
@@ -37,9 +42,9 @@ const handleDiscoverNewFeed = async () => {
         reportError('找到候选订阅源，但校验结果需要留意', result.warning);
       }
     } catch (error) {
-      reportError('查找订阅源失败', error);
+      if (current()) reportError('查找订阅源失败', error);
     } finally {
-      setDiscoveringFeed(false);
+      if (current()) setDiscoveringFeed(false);
     }
   };
 const handleSubmitNewFeed = async () => {
@@ -110,6 +115,7 @@ return (
               <label className="modal-row">
                 <span>订阅地址:</span>
                 <textarea
+                  disabled={addingFeed || discoveringFeed}
                   value={newFeedUrl}
                   onChange={(event) => {
                     setNewFeedUrl(event.target.value);
@@ -120,7 +126,7 @@ return (
                   autoFocus
                 />
               </label>
-              <p className="modal-help">支持 RSSHub，包括自建实例。粘贴完整的 http(s) 订阅地址后查找订阅源。</p>
+              <p className="modal-help">支持 Linux DO 首页、分类、标签和话题链接，也支持 RSSHub 及自建实例。</p>
               {feedDiscoveryCandidates.length > 0 && (
                 <div className="feed-discovery-results">
                   <div className="feed-discovery-title">发现的订阅源</div>
@@ -129,6 +135,7 @@ return (
                       key={candidate.url}
                       type="button"
                       className={`feed-discovery-candidate${selectedFeedCandidateUrl === candidate.url ? ' active' : ''}`}
+                      disabled={addingFeed}
                       onClick={() => {
                         setSelectedFeedCandidateUrl(candidate.url);
                         if (candidate.title && !newFeedName.trim()) setNewFeedName(candidate.title);
@@ -143,6 +150,8 @@ return (
                   ))}
                 </div>
               )}
+              <LinuxDoVerification key={selectedFeedCandidateUrl ?? newFeedUrl} url={selectedFeedCandidateUrl ?? newFeedUrl}
+                disabled={addingFeed || discoveringFeed} onRetry={selectedFeedCandidateUrl ? handleSubmitNewFeed : handleDiscoverNewFeed} />
               <label className="modal-row">
                 <span>名称:</span>
                 <input

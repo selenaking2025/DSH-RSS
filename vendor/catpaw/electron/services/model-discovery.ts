@@ -24,7 +24,9 @@ export async function discoverProviderModels(input: DiscoverProviderModelsInput,
       let response: Response;
       try {
         // Do not forward credentials to redirects, including provider-specific key headers.
-        response = await fetchWithTimeout(url.href, { headers, redirect: 'manual', maxBytes: 2 * 1024 * 1024 });
+        response = await fetchWithTimeout(url.href, {
+          headers, redirect: 'manual', maxBytes: 2 * 1024 * 1024, bypassProxy: url.protocol === 'http:',
+        });
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') throw new ModelProviderError('读取模型列表超时，请稍后重试。');
         throw new ModelProviderError('无法连接模型服务，请检查 API 地址和网络连接。');

@@ -1,10 +1,18 @@
 export function friendlyReaderError(error?: unknown) {
   const detail = (error instanceof Error ? error.message : error ? String(error) : "").replace(/^Error invoking remote method [^:]+: (?:Error: )?/, "");
       if (!detail) return '';
+      if (detail.includes('LINUXDO_VERIFICATION_REQUIRED')) return 'Linux DO 需要验证或登录，请点击「验证 Linux DO 并重试」。已有文章会保留。';
+      if (detail.includes('LINUXDO_RATE_LIMITED')) return 'Linux DO 暂时限制了请求，请稍后再刷新，无需重新验证。';
+      if (detail.includes('LINUXDO_VERIFICATION_EXPIRED')) return '验证窗口因长时间没有操作而关闭，请重新验证。';
+      if (detail.includes('LINUXDO_INVALID_FEED')) return 'Linux DO 没有返回有效的 RSS 内容，请检查订阅地址。';
+      if (detail.includes('LINUXDO_INVALID_URL')) return '请使用 Linux DO 的最新、热门、分类、标签或话题地址。';
+      if (detail.includes('LINUXDO_HTTP_')) return 'Linux DO 暂时无法读取这个订阅，请稍后重试或检查原站访问权限。';
+      if (detail.includes('BROWSER_CANCELLED')) return '验证或读取已取消，可以重新尝试。';
       if (detail === 'URL_EXISTS') return '这个订阅地址已经存在。';
       if (detail === 'FEED_CHANGED_DURING_SYNC') return '订阅已修改或删除，本次旧任务已停止，请按需重新刷新。';
       if (detail === 'FEED_NOT_FOUND') return '找不到该订阅源。';
       if (detail === 'URL_CHANGE_CONFIRMATION_REQUIRED') return '修改订阅地址需要明确确认。';
+      if (detail === 'FEED_URL_BACKUP_FAILED') return '修改前备份未能完成，订阅地址和阅读数据均未更改。请检查可用磁盘空间后重试。';
       if (detail === 'GROUP_NOT_FOUND') return '找不到该文件夹。';
       if (detail === 'GROUP_PARENT_NOT_FOUND') return '所选的上级文件夹已经不存在。';
       if (detail === 'GROUP_NAME_REQUIRED') return '请填写文件夹名称。';
@@ -12,6 +20,10 @@ export function friendlyReaderError(error?: unknown) {
       if (detail === 'GROUP_CYCLE') return '文件夹不能移动到它自己或它的子文件夹里。';
       if (detail === 'OPML_PREVIEW_REQUIRED') return '导入前请先选择 OPML 文件并预览。';
       if (detail === 'OPML_PREVIEW_EXPIRED') return 'OPML 预览已过期，请重新选择文件。';
+      if (detail === 'OPML_FILE_TOO_LARGE') return 'OPML 文件不能超过 10 MiB，请拆分后再导入。';
+      if (detail === 'OPML_FILE_NOT_REGULAR') return '请选择普通的 OPML 文件。';
+      if (detail === 'OPML_PREVIEW_CACHE_FULL') return 'OPML 预览较多，请完成已有导入或稍后重试。';
+      if (detail === 'OPML_PREVIEW_BUSY') return '这份 OPML 正在处理，请稍后重试。';
       if (detail === 'SOURCE_ENDPOINT_NOT_FOUND') return '该端点已经不存在。';
       if (detail === 'X_API_FEED_NOT_ELIGIBLE') return 'Catpaw 无法从这个订阅源识别出 X 账号。';
       if (detail === 'X_API_NOT_CONFIGURED') return '启用这个实验性回退前，请先配置 X API Bearer Token。';
@@ -30,6 +42,8 @@ export function friendlyReaderError(error?: unknown) {
       if (detail.includes('SQLITE_BUSY')) return '数据正在保存，请稍后重试。';
       if (/TIMEOUT|ETIMEDOUT|ECONN|ENOTFOUND/.test(detail)) return '网络请求未完成，请检查连接后重试。';
       if (detail.includes('NOT_A_CATPAW_BACKUP')) return '请选择 Catpaw 导出的数据备份。';
+      if (detail.includes('AUTOMATIC_BACKUP_BUSY')) return '正在保存备份，请完成后再更改设置。';
+      if (/BACKUP_DIRECTORY_UNAVAILABLE|ENOENT|ENOSPC|EACCES|EROFS/.test(detail)) return '无法保存文件，请检查所选目录是否可用、有写入权限且磁盘空间充足。';
       if (detail.includes('BACKUP_REQUIRES_NEWER_APP')) return '这份备份需要更新版本的 Catpaw。';
       if (/BACKUP_|RESTORE_/.test(detail)) return '备份校验未通过，当前数据已保留。';
       if (detail.includes('QUEUE_FULL')) return '后台任务较多，请稍后重试。';

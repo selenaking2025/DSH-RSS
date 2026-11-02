@@ -1483,6 +1483,12 @@ textarea::placeholder {
 }
 
 .detail-content {
+  /* This app-owned box bounds every raw/translated article branch. Contain both
+     layout and paint so fixed positioning, stacking and overflow stay inside it.
+     Do not contain size: ordinary long articles must retain their full height. */
+  contain: layout paint;
+  /* Oversized publisher media remains reachable without overflowing the app. */
+  overflow: auto;
   font-size: 16px;
   line-height: 1.85;
   color: var(--text-body);
@@ -2132,6 +2138,15 @@ textarea::placeholder {
   line-height: 1.45;
 }
 
+.linuxdo-verification {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #8884);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.linuxdo-verification p { margin: 0 0 8px; line-height: 1.5; }
+.linuxdo-verification p[role="alert"] { margin: 8px 0 0; }
+
 .feed-discovery-results {
   display: flex;
   flex-direction: column;
@@ -2345,6 +2360,7 @@ textarea::placeholder {
 }
 
 .source-health-main {
+  grid-column: 2;
   min-width: 0;
   font-size: 12px;
 }
@@ -2362,8 +2378,13 @@ textarea::placeholder {
 }
 
 .source-health-side {
+  grid-column: 3;
   align-items: flex-end;
   font-size: 11px;
+}
+
+.source-health-row > .linuxdo-verification {
+  grid-column: 2 / -1;
 }
 
 .source-health-side .modal-button {

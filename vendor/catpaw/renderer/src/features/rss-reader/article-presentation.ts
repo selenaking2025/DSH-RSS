@@ -23,7 +23,12 @@ export const articleSanitizeOptions = {
   ADD_TAGS: ['iframe'],
   ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'referrerpolicy'],
   FORBID_TAGS: ['style'],
-  FORBID_ATTR: ['bgcolor', 'color', 'background'],
+  FORBID_ATTR: [
+    'bgcolor', 'color', 'background',
+    // Native top-layer popovers/dialogs escape the article's CSS paint boundary,
+    // including when opened by a declarative button without any script.
+    'popover', 'popovertarget', 'popovertargetaction', 'command', 'commandfor',
+  ],
 };
 
 export function resolveArticleLinks(html: string, articleUrl: string | null): string {

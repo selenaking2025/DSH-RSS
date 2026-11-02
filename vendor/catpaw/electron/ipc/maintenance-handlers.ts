@@ -10,8 +10,25 @@ import { CURRENT_SCHEMA_VERSION } from '../data/db-schema';
 import { ensureUserDataDir } from '../runtime';
 import { redactDiagnostic } from '../services/diagnostics';
 import { saveThemePreference } from '../data/appearance-repo';
+import { automaticBackups } from '../services/automatic-backups';
+import { isShuttingDown } from '../services/shutdown-state';
 
 export function registerMaintenanceHandlers() {
+  ipcMain.handle('rss:getAutomaticBackupStatus', () => automaticBackups.getStatus());
+  ipcMain.handle('rss:setAutomaticBackupEnabled', (_event, enabled) => automaticBackups.configure({ enabled }));
+  ipcMain.handle('rss:resetAutomaticBackupDirectory', () => automaticBackups.configure({ directory: null }));
+  ipcMain.handle('rss:chooseAutomaticBackupDirectory', async (event) => {
+    const selected = await dialog.showOpenDialog(getMainWindow()!, {
+      title: '选择自动备份目录', properties: ['openDirectory', 'createDirectory'],
+    });
+    if (isShuttingDown() || event.sender.isDestroyed()) throw new Error('APP_QUITTING');
+    if (selected.canceled || !selected.filePaths[0]) return automaticBackups.getStatus();
+    return automaticBackups.configure({ directory: fs.realpathSync(selected.filePaths[0]) });
+  });
+  ipcMain.handle('rss:runAutomaticBackup', async () => {
+    await automaticBackups.runDue(true);
+    return automaticBackups.getStatus();
+  });
   ipcMain.handle('rss:getMaintenanceStatus', () => getMaintenanceStatus());
   ipcMain.handle('rss:getThemePreference', () => nativeTheme.themeSource);
   ipcMain.handle('rss:setThemePreference', (_event, preference) => {
@@ -29,14 +46,17 @@ export function registerMaintenanceHandlers() {
     return runMaintenance('backup', { path: selected.filePath });
   });
   ipcMain.handle('rss:restoreDatabase', async () => {
-    const selected = await dialog.showOpenDialog(getMainWindow()!, { properties: ['openFile'], filters: [{ name: 'Catpaw 数据备份', extensions: ['sqlite3'] }] });
+    const selected = await dialog.showOpenDialog(getMainWindow()!, {
+      defaultPath: path.join(ensureUserDataDir(), 'backups'), properties: ['openFile'],
+      filters: [{ name: 'Catpaw 数据备份', extensions: ['sqlite3'] }],
+    });
     if (selected.canceled || !selected.filePaths[0]) return { ok: false, error: 'CANCELLED' };
     const source = selected.filePaths[0];
     const summary = await runMaintenance('validate', { path: source });
     const confirmation = await dialog.showMessageBox(getMainWindow()!, {
       type: 'question', buttons: ['取消', '恢复并重启'], defaultId: 0, cancelId: 0,
       message: '恢复这份 Catpaw 备份？',
-      detail: `备份中有 ${summary.feeds} 个订阅源和 ${summary.entries} 篇文章。当前数据会先保存为另一份备份，然后重启应用完成恢复。`,
+      detail: `备份中有 ${summary.feeds} 个订阅源和 ${summary.entries} 篇文章。恢复会将整个阅读库回退到备份时的状态，包括此后的新增文章和阅读操作。当前数据会先保存为另一份备份，然后重启应用完成恢复。`,
     });
     if (confirmation.response !== 1) return { ok: false, error: 'CANCELLED' };
     const result = await runMaintenance('restore', { path: source }, true);

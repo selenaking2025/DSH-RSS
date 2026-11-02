@@ -1,0 +1,34 @@
+{
+  "dependencies": [
+    "@chenglou/pretext",
+    "@mozilla/readability",
+    "@tanstack/react-virtual",
+    "better-sqlite3",
+    "dompurify",
+    "fast-xml-parser",
+    "http-proxy-agent",
+    "https-proxy-agent",
+    "jsdom",
+    "rss-parser"
+  ],
+  "hostDependencies": [
+    "react",
+    "react-dom"
+  ],
+  "excludedDependencies": {
+    "electron-updater": "插件通过 Harness 分发更新，不启动 Catpaw 桌面更新器。"
+  },
+  "reviewSources": [
+    "electron/main.ts",
+    "electron/ipc/register.ts",
+    "electron/ipc/maintenance-handlers.ts",
+    "electron/ipc/confirm-model-requests.ts",
+    "electron/services/model-provider-store.ts",
+    "electron/services/model-text.ts",
+    "electron/ipc/model-provider-handlers.ts",
+    "electron/rss-job-manager.ts",
+    "electron/contracts/rss.ts",
+    "electron/preload.js",
+    "renderer/src/features/rss-reader/dialogs/MaintenanceDialog.tsx"
+  ]
+}

@@ -2,6 +2,7 @@ import { useReaderJobs } from '../features/rss-reader/useReaderJobs';
 import { useReaderSubscriptions } from '../features/rss-reader/useReaderSubscriptions';
 import { useReaderDataChanges } from '../features/rss-reader/useReaderDataChanges';
 import { friendlyReaderError } from '../features/rss-reader/errors';
+import { LinuxDoVerification, isLinuxDoSource } from '../features/rss-reader/LinuxDoVerification';
 import { ReaderDialogs } from '../features/rss-reader/dialogs/ReaderDialogs';
 import type { ReaderDialog } from '../features/rss-reader/dialogs/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -564,6 +565,8 @@ export default function RssReader() {
         </div>
       )}
       <AppUpdateNotice />
+      {errorMessage?.includes('Linux DO 需要验证') && !dialog && <LinuxDoVerification url="https://linux.do/"
+        onRetry={async () => { clearError(); await startRefresh(feeds.filter((feed) => isLinuxDoSource(feed.url)).map((feed) => feed.id)); }} />}
       <nav className="reader-compact-nav" aria-label="阅读视图">
         <button type="button" aria-current={compactPane === 'sources' ? 'page' : undefined}
           onClick={() => setCompactPane('sources')}><ReaderIcon name="sources" />订阅</button>

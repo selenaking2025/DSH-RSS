@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { MaintenanceStatus } from '../../../../electron/contracts/maintenance';
 const labels = { rebuild: '重建搜索索引', import: '导入订阅', preview: '检查导入内容',
-  backup: '保存并检查备份', validate: '检查备份', restore: '准备恢复', applyRestore: '恢复数据' };
+  backup: '保存并检查备份', automaticBackup: '保存并检查自动备份', validate: '检查备份', restore: '准备恢复', applyRestore: '恢复数据' };
 export function useMaintenanceProgress(active: boolean) {
   const [status, setStatus] = useState<MaintenanceStatus | null>(null);
   useEffect(() => {

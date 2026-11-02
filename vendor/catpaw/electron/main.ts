@@ -25,6 +25,7 @@ import { registerUpdateHandlers } from './ipc/update-handlers';
 import { beginShutdown } from './services/shutdown-state';
 import { smartReading } from './services/smart-reading';
 import { registerReadingHandlers } from './ipc/reading-handlers';
+import { startAutomaticBackups, stopAutomaticBackups } from './services/automatic-backups';
 
 configureElectronAppIdentity(app);
 let updates: ReturnType<typeof createAppUpdates> | undefined;
@@ -60,6 +61,7 @@ else {
     registerReaderNotifications();
     createWindow();
     registerSchedulers();
+    startAutomaticBackups();
     updates.start();
     smartReading.begin();
     app.on('activate', () => createWindow());
@@ -77,7 +79,8 @@ function prepareToQuit() {
   stopArticleSummaries();
   stopSchedulers();
   rssJobManager.pause(); readerJobManager.pause();
-  quitting = Promise.all([smartReading.stop(), maintenanceJobManager.shutdown()]).then(() => Promise.all([rssJobManager.shutdown(), readerJobManager.shutdown()])).then(() => {
+  const backupsStopped = stopAutomaticBackups();
+  quitting = Promise.all([smartReading.stop(), maintenanceJobManager.shutdown()]).then(() => Promise.all([rssJobManager.shutdown(), readerJobManager.shutdown(), backupsStopped])).then(() => {
     closeBrowserHost();
     closeDb();
     quitReady = true;

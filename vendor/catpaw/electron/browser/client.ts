@@ -4,7 +4,7 @@ import type { BrowserRequest, BrowserResult } from './protocol';
 
 export async function browserRequest(input: BrowserRequest): Promise<BrowserResult> {
   const budget = currentRequestBudget();
-  if (input.kind === 'html') input = { ...input, priority: input.priority ?? budget?.priority ?? 'interactive' };
+  if (input.kind === 'html' || input.kind === 'linuxdo-feed') input = { ...input, priority: input.priority ?? budget?.priority ?? 'interactive' };
   if (!process.send) {
     const { runBrowserRequest } = await import('./host');
     const controller = new AbortController();

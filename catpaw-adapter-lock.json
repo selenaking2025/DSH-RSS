@@ -1,0 +1,17 @@
+{
+  "revision": "5c703811c179c592ca1c602383def7f395bdeaf9",
+  "note": "已检查插件启动与退出、后台接口、模型额度与浏览器确认；对应 tests/upstream.test.ts。",
+  "files": {
+    "electron/main.ts": "90b7e5d8804471c415d69aa77dff8e2d27fc7836b589e971f933f7e3c1f03b45",
+    "electron/ipc/register.ts": "dba291185d66337a3ed64d9f812cd8a132bb1d77c0e486362c15ee816e2beba5",
+    "electron/ipc/maintenance-handlers.ts": "dc9d79da2746da3083339e1784c728de5b5e8e141d2ac06894701446c2312474",
+    "electron/ipc/confirm-model-requests.ts": "e5c72c93a3d792d0b174d56339affaad4bdb45756cdaf7b4ee6d4675e6da3bc6",
+    "electron/services/model-provider-store.ts": "451a98291ae57b9b0adc508fd4789433d796be5372cedba32c0ce182a3a45b73",
+    "electron/services/model-text.ts": "e0f55543c019059cd8a72305775881f37fce3f4f9d5dd00c6529300b7512c0ce",
+    "electron/ipc/model-provider-handlers.ts": "8e7b4ee7f4a348758a3f3b23f2eb2a10f2f85c58d11b19afe88e60c2a5c2ac42",
+    "electron/rss-job-manager.ts": "5be95471fa954d74c619e339de940880210c7007fb17eb5ab06c7001ca324e4b",
+    "electron/contracts/rss.ts": "c75c25b763a7521d3860b308a69bcc96157c2f1681e3f4917982bcf35e55cbba",
+    "electron/preload.js": "49597da4b1d6f24dcdbde7db2256a39ead6c56120173ee8fcba7832f15e39dd0",
+    "renderer/src/features/rss-reader/dialogs/MaintenanceDialog.tsx": "ae0ac4b9c518aeb804ce7ea2e6a993096e71124c4651fdd4f68fa50ad326a0c5"
+  }
+}

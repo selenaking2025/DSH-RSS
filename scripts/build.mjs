@@ -3,8 +3,10 @@ import { cp, mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import { join, resolve, relative, dirname } from 'node:path';
 import { adaptRssJobs } from './adapt-jobs.mjs';
 import { adaptModel } from './adapt-model.mjs';
+import { bridgeContract } from './lib/catpaw-contract.mjs';
+import { checkCatpaw } from './check-catpaw.mjs';
 
-const root = resolve('.');
+await checkCatpaw();
 async function files(dir) {
   const result = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -14,17 +16,20 @@ async function files(dir) {
   return result;
 }
 await rm('.generated', { recursive: true, force: true });
+await rm('dist', { recursive: true, force: true });
 await cp('vendor/catpaw', '.generated/catpaw', { recursive: true });
 await mkdir('dist/backend', { recursive: true });
 await mkdir('output', { recursive: true });
 function importPath(from, to) { const path = relative(dirname(resolve(from)), resolve(to)); return path.startsWith('.') ? path : `./${path}`; }
 await adaptRssJobs(importPath);
 await adaptModel(importPath);
-for (const [file, target] of [['ipc/register.ts', 'src/backend/registry.ts'], ['desktop-window.ts', 'src/backend/windows.ts']]) {
+for (const [file, target] of [['ipc/register.ts', 'src/backend/registry.ts'], ['desktop-window.ts', 'src/backend/windows.ts'],
+  ['ipc/confirm-model-requests.ts', 'src/backend/model-confirmation.ts']]) {
   const destination = resolve('.generated/catpaw/electron', file);
   await writeFile(destination, `export * from ${JSON.stringify(importPath(destination, target))};\n`);
 }
-await writeFile('.generated/catpaw/electron/app-metadata.ts', 'export function getAppMetadata() { return { version: "0.1.0" }; }\n');
+const metadataFile = '.generated/catpaw/electron/app-metadata.ts';
+await writeFile(metadataFile, `import { PLUGIN_VERSION } from ${JSON.stringify(importPath(metadataFile, 'src/shared/version.ts'))};\nexport function getAppMetadata() { return { version: PLUGIN_VERSION }; }\n`);
 // The pinned source's structural DOM cast predates the installed DOM typings.
 const discoveryPath = '.generated/catpaw/electron/providers/feed-discovery.ts';
 await writeFile(discoveryPath, (await readFile(discoveryPath, 'utf8')).replace(
@@ -39,13 +44,21 @@ for (const file of rendererFiles.filter(file => /\.(tsx?|js)$/.test(file) && !fi
   if (source.includes('document.')) { source = source.replaceAll('document.', 'readerDocument.'); names.push('readerDocument'); }
   // Original confirmation callers are async; keep the host connection responsive.
   if (source.includes('window.confirm(')) { source = source.replaceAll('window.confirm(', 'await readerConfirm('); names.push('readerConfirm'); }
-  if (file.endsWith('/MaintenanceDialog.tsx')) source = source.replace('已准备恢复', '已恢复阅读数据');
+  if (file.endsWith('/MaintenanceDialog.tsx')) {
+    source = source.replace('已准备恢复', '已恢复阅读数据');
+    const desktopRestore = '从备份恢复会打开备份文件夹，选择对应时间的 before-feed-url 文件即可恢复修改前的地址和阅读数据。';
+    if (source.split(desktopRestore).length !== 2) throw new Error('Catpaw 备份恢复提示已变化，请检查浏览器文件适配。');
+    source = source.replace(desktopRestore, '在运行 Harness 的电脑上找到对应时间的 before-feed-url 备份文件，再通过“从备份恢复”上传，可恢复修改前的地址和阅读数据。');
+  }
   if (names.length) source = `import { ${names.join(', ')} } from ${JSON.stringify(importPath(resolve(file), 'src/client/environment.ts'))};\n${source}`;
   await writeFile(file, source);
 }
 const contract = await readFile('vendor/catpaw/electron/contracts/rss.ts', 'utf8');
-const methods = [...contract.matchAll(/^  (\w+):/gm)].map(match => match[1]);
-await writeFile('src/client/methods.ts', `// Generated from the imported RssBridge contract.\nexport const INVOKE_METHODS = ${JSON.stringify(methods.filter(name => !name.startsWith('on')), null, 2)} as const;\nexport const EVENT_METHODS = { onStateChanged: 'rss:stateChanged', onReadingChanged: 'rss:readingChanged', onTranslationProgress: 'rss:translationProgress', onUpdateStatusChanged: 'rss:updateStatusChanged' } as const;\n`);
+const methods = Object.keys(bridgeContract(contract));
+const events = { onStateChanged: 'rss:stateChanged', onReadingChanged: 'rss:readingChanged', onTranslationProgress: 'rss:translationProgress', onUpdateStatusChanged: 'rss:updateStatusChanged' };
+const eventMethods = methods.filter(name => name.startsWith('on'));
+if (eventMethods.some(name => !events[name]) || Object.keys(events).some(name => !eventMethods.includes(name))) throw new Error('Catpaw 事件接口已变化，请更新浏览器事件映射。');
+await writeFile('src/client/methods.ts', `// Generated from the imported RssBridge contract.\nexport const INVOKE_METHODS = ${JSON.stringify(methods.filter(name => !name.startsWith('on')), null, 2)} as const;\nexport const EVENT_METHODS = ${JSON.stringify(events)} as const;\n`);
 
 let css = (await Promise.all(rendererFiles.filter(file => file.endsWith('.css')).map(file => readFile(file, 'utf8')))).join('\n');
 css = css.replaceAll(':root', ':host').replace(/\bbody\s*\{/g, '.catpaw-body {').replaceAll('100vh', '100%');

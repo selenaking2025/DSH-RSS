@@ -1,5 +1,7 @@
 import { fetchWithTimeout } from '../network/http';
 import { classifyFeedError } from '../feed-errors';
+import { isLinuxDoFeedUrl } from '../sources/linuxdo';
+import { fetchLinuxDoFeed } from './linuxdo-feed';
 
 function readPositiveIntegerEnv(name: string, fallback: number) {
   const raw = process.env[name]?.trim();
@@ -158,7 +160,8 @@ function shouldRetryRefreshFirstPageError(error: unknown) {
 }
 
 export async function fetchRssPage(url: string, headers: Record<string, string>, backfill: boolean, retry: boolean) {
-  const fetch = (timeout: number) => fetchWithTimeout(url, { headers }, timeout);
+  const fetch = (timeout: number) => isLinuxDoFeedUrl(url)
+    ? fetchLinuxDoFeed(url, headers, timeout) : fetchWithTimeout(url, { headers }, timeout);
   let response: Response;
   try {
     try { response = await fetch(resolveFeedFetchTimeoutMs(url, { backfill })); }

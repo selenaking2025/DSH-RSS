@@ -16,5 +16,5 @@ export type SummarizeArticleInput = { entryId: string; requestId: string; regene
 export type ArticleSummaryResult = { ok: true; analysis: ArticleSummary }
   | { ok: false; code: 'CANCELLED' | 'CONFIG_REQUIRED' | 'FAILED'; error: string };
 export class SummaryError extends Error {
-  constructor(message: string, public readonly code: 'FAILED' | 'CONFIG_REQUIRED' = 'FAILED') { super(message); }
+  constructor(message: string, public readonly code: 'FAILED' | 'CONFIG_REQUIRED' | 'CANCELLED' = 'FAILED') { super(message); }
 }

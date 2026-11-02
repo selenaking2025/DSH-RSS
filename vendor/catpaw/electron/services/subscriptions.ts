@@ -1,10 +1,15 @@
 import { listFeeds } from '../data/feed-repo';
 import { updateFeed } from '../data/feed-write-repo';
+import { feedUrlChangeBackupPath } from '../data/database-backup';
+import { getFeedSyncTarget, type FeedSyncTarget } from '../data/feed-sync-repo';
 import { extractXiaoyuzhouPodcastIdFromUrl, resolveFeedUrlFromInput } from '../sources/rsshub';
 import { rssJobManager } from '../rss-job-manager';
 import { withHistoryDepthDefaults } from './history-options';
 import { enqueueBackfillFeed, enqueueRefreshFeed, toRunOutcome } from './rss-run-service';
 import { runWithStorageWriteRetry } from './sqlite-retry';
+import { runMaintenance } from './maintenance';
+import { isShuttingDown } from './shutdown-state';
+import type { RssResult } from '../contracts/rss';
 
 type AddSubscriptionInput = { url: string; title?: string | null; groupId?: string | null };
 type UpdateSubscriptionInput = Parameters<typeof updateFeed>[1] & { id: string };
@@ -30,15 +35,41 @@ export async function addSubscription(input: AddSubscriptionInput) {
   } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) }; }
 }
 
-export async function updateSubscription(input: UpdateSubscriptionInput, onChanged: () => void) {
-  const updated = await runWithStorageWriteRetry('updateFeed', () => updateFeed(input.id, input));
+export async function updateSubscription(input: UpdateSubscriptionInput, onChanged: () => void): Promise<RssResult<'updateFeed'>> {
+  let backupPath: string | undefined;
+  let expectedSource: FeedSyncTarget | undefined;
+  const url = input.url?.trim();
+  if (url) {
+    const feeds = listFeeds();
+    const current = feeds.find((feed) => feed.id === input.id);
+    if (!current) return { ok: false, error: 'FEED_NOT_FOUND' };
+    if (url !== current.url) {
+      if (!input.confirmUrlChange) return { ok: false, error: 'URL_CHANGE_CONFIRMATION_REQUIRED', urlChanged: true };
+      if (feeds.some((feed) => feed.id !== input.id && feed.url === url)) return { ok: false, error: 'URL_EXISTS' };
+      expectedSource = getFeedSyncTarget(input.id);
+      try {
+        // Use the maintenance barrier and worker so validation cannot block the
+        // main process and the snapshot includes all completed reading work.
+        const backup = await runMaintenance('backup', { path: feedUrlChangeBackupPath() });
+        backupPath = backup.filePath;
+      } catch (error) {
+        console.warn('[rss] URL change backup failed', error);
+        return { ok: false, error: 'FEED_URL_BACKUP_FAILED' };
+      }
+    }
+  }
+  const updated = await runWithStorageWriteRetry('updateFeed', () => {
+    if (isShuttingDown()) return { ok: false, error: 'APP_QUITTING' };
+    return updateFeed(input.id, input, expectedSource);
+  });
   if (!updated.ok) return updated;
   onChanged();
   if (!updated.urlChanged) return updated;
+  const saved = { ...updated, backupPath };
   try {
     const refresh = toRunOutcome(await enqueueRefreshFeed({ feedId: input.id }));
-    if (refresh.status !== 'completed') return { ...updated, warning: refresh.failure.error };
+    if (refresh.status !== 'completed') return { ...saved, warning: refresh.failure.error };
     const history = toRunOutcome(await enqueueBackfillFeed({ feedId: input.id, options: withHistoryDepthDefaults() }));
-    return history.status === 'completed' ? updated : { ...updated, warning: history.failure.error };
-  } catch (error) { return { ...updated, warning: error instanceof Error ? error.message : String(error) }; }
+    return history.status === 'completed' ? saved : { ...saved, warning: history.failure.error };
+  } catch (error) { return { ...saved, warning: error instanceof Error ? error.message : String(error) }; }
 }

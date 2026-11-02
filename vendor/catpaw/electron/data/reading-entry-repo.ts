@@ -8,7 +8,7 @@ import type { EntryListItem } from '../contracts/reader';
 export type ReadingCandidate = EntryListItem & { assessment: ReadingAssessment | null; sourceHash: string | null;
   feedback: ReadingFeedback | null; savedAt: number; feedRevision: number; estimatedText: string };
 
-function scopedFeedIds(focus: ReadingFocus): string[] | null {
+export function scopedFeedIds(focus: ReadingFocus): string[] | null {
   if (!focus.feedIds.length && !focus.groupIds.length) return null;
   const groups = new Set(focus.groupIds);
   const rows = getDb().prepare('SELECT id, parent_id FROM feed_groups').all() as { id: string; parent_id: string | null }[];
@@ -16,6 +16,15 @@ function scopedFeedIds(focus: ReadingFocus): string[] | null {
   while (changed) { changed = false; for (const row of rows) if (row.parent_id && groups.has(row.parent_id) && !groups.has(row.id)) { groups.add(row.id); changed = true; } }
   const feeds = getDb().prepare('SELECT id, group_id FROM feeds').all() as { id: string; group_id: string | null }[];
   return [...new Set([...focus.feedIds, ...feeds.filter((feed) => feed.group_id && groups.has(feed.group_id)).map((feed) => feed.id)])];
+}
+export function readingEntriesInScope(focus: ReadingFocus, entryIds: string[]) {
+  if (getReadingFocus(focus.id)?.revision !== focus.revision) return false;
+  const entries = [...new Set(entryIds)];
+  if (!entries.length) return true;
+  const ids = scopedFeedIds(focus);
+  const rows = getDb().prepare(`SELECT feed_id AS feedId FROM entries WHERE id IN (${entries.map(() => '?').join(',')})`)
+    .all(...entries) as Array<{ feedId: string }>;
+  return rows.length === entries.length && rows.every((entry) => ids === null || ids.includes(entry.feedId));
 }
 function scope(focus: ReadingFocus, window: ReadingWindow) {
   const ids = scopedFeedIds(focus);

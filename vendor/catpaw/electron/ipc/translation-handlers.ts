@@ -1,5 +1,6 @@
 import { ipcMain } from './register';
 import { generateArticleTranslation } from '../services/generate-article-translation';
+import { confirmModelRequests } from './confirm-model-requests';
 
 const requests = new Map<number, { requestId: string; controller: AbortController }>();
 export function stopArticleTranslations() {
@@ -24,7 +25,7 @@ export function registerTranslationHandlers() {
         if (!event.sender.isDestroyed() && requests.get(owner) === request) {
           event.sender.send('rss:translationProgress', { requestId: input.requestId, completed, total });
         }
-      });
+      }, (count) => confirmModelRequests(event.sender, '翻译', count, request.controller.signal));
     } finally {
       event.sender.removeListener('destroyed', cancel);
       if (requests.get(owner) === request) requests.delete(owner);

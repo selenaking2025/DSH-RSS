@@ -22,6 +22,12 @@ import { ownerWindow, closeOwner, closeWindows, send, touchOwner, reapOwners } f
 import { isRecord, parseCall, errorMessage } from '../shared/protocol.ts';
 import { registerDataHandlers } from './data-handlers.ts';
 import { withRequestSignal } from './request-scope.ts';
+import { registerAutomaticBackupHandlers } from './automatic-backups.ts';
+import { registerModelConfirmationHandler } from './model-confirmation.ts';
+import { startAutomaticBackups, stopAutomaticBackups } from '../../.generated/catpaw/electron/services/automatic-backups';
+import { PLUGIN_VERSION } from '../shared/version.ts';
+import { INVOKE_METHODS } from '../client/methods.ts';
+import { missingBackendMethods } from '../shared/capabilities.ts';
 
 if (!process.send || !process.env.CATPAW_USER_DATA_DIR || !path.isAbsolute(process.env.CATPAW_USER_DATA_DIR)) {
   throw new Error('Start the Catpaw backend through its Harness plugin with an explicit data directory.');
@@ -37,12 +43,13 @@ const active = new Map<string, { owner: string; method: string; args: unknown[];
 async function stop() {
   if (stopping) return stopping;
   beginShutdown(); stopSchedulers(); stopArticleSummaries(); stopArticleTranslations();
+  const backupsStopped = stopAutomaticBackups();
   for (const request of active.values()) request.controller.abort();
   rssJobManager.pause(); readerJobManager.pause();
   stopping = (async () => {
     await smartReading.stop();
     await maintenanceJobManager.shutdown();
-    await Promise.all([rssJobManager.shutdown(), readerJobManager.shutdown()]);
+    await Promise.all([rssJobManager.shutdown(), readerJobManager.shutdown(), backupsStopped]);
     closeBrowserHost(); closeDb(); closeWindows(); app.exit(0);
   })();
   return stopping;
@@ -60,11 +67,14 @@ try {
   db.prepare("UPDATE pipeline_runs SET status = 'failed', finished_at = ?, error = 'APP_INTERRUPTED' WHERE status IN ('running', 'queued')").run(Date.now());
   registerRssHandlers(); registerModelProviderHandlers(); registerSummaryHandlers(); registerTranslationHandlers();
   registerReadingHandlers(); registerDataHandlers(); registerReaderNotifications();
+  registerAutomaticBackupHandlers(); registerModelConfirmationHandler();
   const reaper = setInterval(() => reapOwners(new Set([...active.values()].map(request => request.owner))), 60_000); reaper.unref();
-  ipcMain.handle('rss:getUpdateStatus', () => ({ revision: 0, phase: 'unavailable', currentVersion: '0.1.0', message: '此版本由 Harness 插件管理器更新。' }));
+  ipcMain.handle('rss:getUpdateStatus', () => ({ revision: 0, phase: 'unavailable', currentVersion: PLUGIN_VERSION, message: '此版本由 Harness 插件管理器更新。' }));
   for (const channel of ['checkForUpdates', 'downloadUpdate', 'installUpdate'] as const) {
     ipcMain.handle(`rss:${channel}`, () => ({ ok: false, error: '请通过 Harness 插件管理器更新 Catpaw。' }));
   }
+  const missing = missingBackendMethods(INVOKE_METHODS, methods());
+  if (missing.length) throw new Error(`CATPAW_ADAPTER_INCOMPLETE: ${missing.join(', ')}`);
   process.on('message', message => {
     if (!isRecord(message)) return;
     if (message.kind === 'shutdown') { void stop(); return; }
@@ -97,6 +107,7 @@ try {
     })();
   });
   if (process.env.CATPAW_DISABLE_SCHEDULER !== '1') { registerSchedulers(); smartReading.begin(); }
+  if (process.env.CATPAW_DISABLE_AUTOMATIC_BACKUPS !== '1') startAutomaticBackups();
   send({ kind: 'ready', methods: methods() });
 } catch (error) { send({ kind: 'fatal', error: errorMessage(error) }); await stop(); }
 }

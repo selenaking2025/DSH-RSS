@@ -1,6 +1,6 @@
 {
   "name": "dsh-catpaw",
-  "version": "0.1.0",
+  "version": "0.1.6",
   "description": "Catpaw RSS reader and agent tools for DeepSeek Harness",
   "private": true,
   "type": "module",
@@ -16,7 +16,8 @@
     "PLAN.md",
     "VALIDATION.md",
     "vendor/catpaw/SOURCE.json",
-    "vendor/catpaw/THIRD_PARTY_NOTICES.txt"
+    "vendor/catpaw/THIRD_PARTY_NOTICES.txt",
+    "docs/CATPAW-UPDATES.md"
   ],
   "dsh": {
     "bundle": {
@@ -40,14 +41,19 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
-    "check": "npm run build && npm run typecheck && npm test",
+    "check": "npm run build && npm run typecheck && npm run test:sync && npm test",
     "dev": "node scripts/dev.mjs",
-    "pack:plugin": "npm run build && npm pack --pack-destination output"
+    "pack:plugin": "node scripts/update-catpaw.mjs",
+    "check:catpaw": "node scripts/check-catpaw.mjs",
+    "check:upstream": "node scripts/sync-catpaw.mjs --check",
+    "sync:catpaw:deps": "node scripts/sync-catpaw-deps.mjs",
+    "test:sync": "node --test tests/*.test.mjs",
+    "update:catpaw": "node scripts/update-catpaw.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.4",
-    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/dsh-user-approval": "0.2.1-rc.2",
     "@deepseek-ai/schemastery": "~3.18.4"
   },
@@ -56,8 +62,8 @@
     "@mozilla/readability": "0.6.0",
     "@tanstack/react-virtual": "3.14.11",
     "better-sqlite3": "13.0.3",
-    "dompurify": "3.4.15",
-    "electron": "44.2.0",
+    "dompurify": "3.4.17",
+    "electron": "44.9.3",
     "fast-xml-parser": "5.11.1",
     "http-proxy-agent": "7.0.2",
     "https-proxy-agent": "7.0.6",
@@ -67,8 +73,8 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.5",
     "@deepseek-ai/dsh": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/dsh-llm": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.1-rc.2",
     "@deepseek-ai/dsh-user-approval": "0.2.1-rc.2",
     "@deepseek-ai/schemastery": "3.18.5",
     "@types/better-sqlite3": "9.6.0",
@@ -80,6 +86,7 @@
     "pnpm": "11.7.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "semver": "7.8.5",
     "tsx": "4.23.13",
     "typescript": "5.9.3"
   }

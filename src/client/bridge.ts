@@ -59,6 +59,10 @@ export function createBridge(rpc: Rpc) {
   }
   void poll();
   return { rss: api as RssBridge, request,
+    onEvent(channel: string, listener: (value: unknown) => void) {
+      let set = listeners.get(channel); if (!set) listeners.set(channel, set = new Set());
+      set.add(listener); return () => { set.delete(listener); };
+    },
     onTheme(listener: (preference: string) => void) { themeListeners.add(listener); listener(theme); return () => { themeListeners.delete(listener); }; },
     onStatus(listener: (error: string) => void) { statusListeners.add(listener); listener(status); return () => { statusListeners.delete(listener); }; },
     onReconnect(listener: () => void) { reconnectListeners.add(listener); return () => { reconnectListeners.delete(listener); }; },

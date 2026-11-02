@@ -16,8 +16,10 @@ export async function adaptModel(importPath) {
     ['    const supplied = normalizeModelApiKey(input.apiKey);', '    if (input.providerId === "harness") return undefined;\n    const supplied = normalizeModelApiKey(input.apiKey);'],
   ], `import { harnessProvider, guardHarnessProvider } from ${JSON.stringify(importPath(store, 'src/backend/harness-model.ts'))};\n`);
   const text = '.generated/catpaw/electron/services/model-text.ts';
-  await edit(text, [['  const request = requestBody(target, system, content);',
-    '  if (target.baseUrl === HARNESS_BASE_URL) return requestHarnessModel(target.model, system, content, signal);\n  const request = requestBody(target, system, content);']],
+  // Reserve through Catpaw's shared budget before either transport. Harness only
+  // returns text here, so its reservation remains explicitly estimated usage.
+  await edit(text, [['  let response: Response;',
+    '  if (target.baseUrl === HARNESS_BASE_URL) return requestHarnessModel(target.model, system, content, signal);\n  let response: Response;']],
     `import { requestHarnessModel } from ${JSON.stringify(importPath(text, 'src/backend/harness-model.ts'))};\nimport { HARNESS_BASE_URL } from ${JSON.stringify(importPath(text, 'src/shared/model.ts'))};\n`);
   const handlers = '.generated/catpaw/electron/ipc/model-provider-handlers.ts';
   await edit(handlers, [['    discoverProviderModels(input, await modelProviderStore.discoveryKey(input))',

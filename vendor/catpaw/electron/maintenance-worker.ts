@@ -2,6 +2,7 @@ import { closeDb } from './data/db-core';
 import { rebuildSearchIndex } from './data/entry-repo';
 import { importOpmlFromStringWithOptions, previewOpmlFromStringWithOptions } from './services/opml';
 import { backupDatabase, validateDatabaseBackup, prepareDatabaseRestore, applyPendingDatabaseRestore } from './data/database-backup';
+import { createAutomaticBackup } from './data/automatic-backup';
 import type { MaintenanceMessage, MaintenanceRequest, MaintenanceOutputs } from './contracts/maintenance';
 
 const send = (message: MaintenanceMessage) => process.send?.(message);
@@ -17,6 +18,7 @@ process.on('message', async (request: MaintenanceRequest) => {
       case 'preview': value = previewOpmlFromStringWithOptions(request.input.xml, request.input); break;
       case 'import': value = importOpmlFromStringWithOptions(request.input.xml, request.input, progress); break;
       case 'backup': value = await backupDatabase(request.input.path); break;
+      case 'automaticBackup': value = await createAutomaticBackup(request.input); break;
       case 'validate': value = validateDatabaseBackup(request.input.path); break;
       case 'restore': value = await prepareDatabaseRestore(request.input.path, request.input.mode); break;
       case 'applyRestore': value = await applyPendingDatabaseRestore(); break;

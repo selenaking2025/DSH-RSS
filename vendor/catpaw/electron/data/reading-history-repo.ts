@@ -2,8 +2,8 @@ import { getDb } from './db-core';
 import { getEntry } from './entry-repo';
 import { articleSummarySourceHash } from './article-summary-repo';
 import { getReadingFocus } from './reading-focus-repo';
-import { sourceStillCurrent } from './reading-entry-repo';
-import { ReadingError, READING_RULE_VERSION, type ReadingFeedback, type ReadingProgress } from '../contracts/smart-reading';
+import { scopedFeedIds, sourceStillCurrent } from './reading-entry-repo';
+import { ReadingError, READING_RULE_VERSION, type ReadingFeedback, type ReadingFocus, type ReadingProgress } from '../contracts/smart-reading';
 
 export type ReadingHistory = { entryId: string; sourceHash: string; kind: 'opened' | 'known'; title: string; excerpt: string; occurredAt: number; feedRevision: number };
 export function recordReadingVisit(entryId: string, kind: ReadingHistory['kind'] = 'opened') {
@@ -22,9 +22,12 @@ function invalidateHistoryComparisons(entryId: string) {
   getDb().prepare('DELETE FROM reading_comparison_contexts WHERE entry_id IN (SELECT entry_id FROM reading_progress WHERE previous_entry_id=?)').run(entryId);
   getDb().prepare('DELETE FROM reading_progress WHERE previous_entry_id=?').run(entryId);
 }
-export function listReadingHistory(excludeId: string, limit = 150): ReadingHistory[] {
+export function listReadingHistory(focus: ReadingFocus, excludeId: string, limit = 150): ReadingHistory[] {
+  const ids = scopedFeedIds(focus);
+  const scope = ids ? ids.length ? ` AND e.feed_id IN (${ids.map(() => '?').join(',')})` : ' AND 0' : '';
   return getDb().prepare(`SELECT h.entry_id AS entryId,h.source_hash AS sourceHash,h.kind,h.title,h.excerpt,h.occurred_at AS occurredAt,f.sync_revision AS feedRevision
-    FROM reading_history h JOIN entries e ON e.id=h.entry_id JOIN feeds f ON f.id=e.feed_id WHERE h.entry_id<>? ORDER BY h.occurred_at DESC LIMIT ?`).all(excludeId, limit) as ReadingHistory[];
+    FROM reading_history h JOIN entries e ON e.id=h.entry_id JOIN feeds f ON f.id=e.feed_id
+    WHERE h.entry_id<>?${scope} ORDER BY h.occurred_at DESC LIMIT ?`).all(excludeId, ...(ids ?? []), limit) as ReadingHistory[];
 }
 export function saveReadingFeedback(entryId: string, focusId: string, value: ReadingFeedback | null) {
   getDb().transaction(() => {

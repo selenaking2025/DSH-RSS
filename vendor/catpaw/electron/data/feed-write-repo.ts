@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { getDb } from './db-core';
 import { syncSourceEndpointRecordsForFeed } from './source-endpoint-repo';
-import { getFeedSyncTarget, writeFeedSync, type FeedSyncTarget } from './feed-sync-repo';
+import { assertFeedSyncTarget, getFeedSyncTarget, writeFeedSync, type FeedSyncTarget } from './feed-sync-repo';
 
 function extractXiaoyuzhouPodcastIdFromMirrorUrl(url: string): string | null {
   try {
@@ -148,6 +148,7 @@ export function updateFeed(
     enabled?: boolean;
     fetchIntervalMinutes?: number | null;
   },
+  expectedSource?: FeedSyncTarget,
 ) {
   const database = getDb();
   const existing = database
@@ -198,13 +199,12 @@ export function updateFeed(
 
   try {
     const transaction = database.transaction(() => {
+      // A URL edit may have waited for its recovery backup. Do not apply it to
+      // a subscription that was replaced or edited in the meantime.
+      if (expectedSource) assertFeedSyncTarget(database, expectedSource, id);
       if (urlChanged) {
-        const entryRows = database.prepare('SELECT id FROM entries WHERE feed_id = ?').all(id) as Array<{ id: string }>;
-        const deleteFts = database.prepare('DELETE FROM entries_fts WHERE entry_id = ?');
-        for (const entry of entryRows) {
-          deleteFts.run(entry.id);
-        }
-        database.prepare('DELETE FROM entries WHERE feed_id = ?').run(id);
+        // Changing the fetch address never clears reading data. Article IDs,
+        // favorites, read state, saved AI results and search rows stay intact.
         database
           .prepare(
             `UPDATE feeds
@@ -233,7 +233,7 @@ export function updateFeed(
         );
       syncSourceEndpointRecordsForFeed(id);
     });
-    transaction();
+    transaction.immediate();
     return { ok: true, urlChanged };
   } catch (error) {
     if (error instanceof Error && /UNIQUE/.test(error.message)) {

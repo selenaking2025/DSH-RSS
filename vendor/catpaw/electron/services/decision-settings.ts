@@ -3,23 +3,28 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ensureUserDataDir } from '../runtime';
 import { localProviderSecrets } from './local-provider-secrets';
-import { normalizeModelApiKey, normalizeModelBaseUrl } from '../contracts/model-providers';
+import { ModelProviderError, normalizeModelApiKey, normalizeModelBaseUrl, parseStoredModelBaseUrl } from '../contracts/model-providers';
 import { DecisionError, JEV_BASE_URL, JEV_MODEL, type DecisionSettings, type DecisionTarget, type SaveDecisionSettings } from '../contracts/decision';
 
 type Stored = Omit<DecisionSettings, 'keyConfigured'> & { encryptedApiKey: string | null };
 const defaults: Stored = { baseUrl: JEV_BASE_URL, model: JEV_MODEL, enabled: false, autoFetch: false,
   groupEvents: true, trackProgress: true, dailyTokenLimit: 1_000_000, revision: 0, encryptedApiKey: null };
 
-export function validateDecisionSettings(input: SaveDecisionSettings) {
+function parseStoredDecisionSettings(input: SaveDecisionSettings) {
   if (!input || typeof input !== 'object' || typeof input.model !== 'string'
     || !/^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,199}$/.test(input.model)
     || !['enabled', 'autoFetch', 'groupEvents', 'trackProgress'].every((key) => typeof input[key as keyof SaveDecisionSettings] === 'boolean')
     || !Number.isSafeInteger(input.dailyTokenLimit) || input.dailyTokenLimit < 10_000 || input.dailyTokenLimit > 100_000_000
     || (input.clearKey !== undefined && typeof input.clearKey !== 'boolean')) throw new DecisionError('请检查筛选模型、开关和每日用量上限。');
   if (['jev-latest', 'jev-preview'].includes(input.model)) throw new DecisionError('请选择明确的 Jev 版本号，以便保存的判断与模型版本一致。');
-  return { baseUrl: normalizeModelBaseUrl(input.baseUrl), model: input.model, enabled: input.enabled,
+  return { baseUrl: parseStoredModelBaseUrl(input.baseUrl), model: input.model, enabled: input.enabled,
     autoFetch: input.autoFetch, groupEvents: input.groupEvents, trackProgress: input.trackProgress,
     dailyTokenLimit: input.dailyTokenLimit };
+}
+
+export function validateDecisionSettings(input: SaveDecisionSettings) {
+  const settings = parseStoredDecisionSettings(input);
+  return { ...settings, baseUrl: normalizeModelBaseUrl(settings.baseUrl) };
 }
 
 export class DecisionSettingsStore {
@@ -32,7 +37,7 @@ export class DecisionSettingsStore {
       if (!fs.existsSync(this.file)) return { ...defaults };
       if (fs.statSync(this.file).size > 32768) throw new Error();
       const data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-      const settings = validateDecisionSettings(data);
+      const settings = parseStoredDecisionSettings(data);
       if (!Number.isSafeInteger(data.revision) || data.revision < 0 || (data.encryptedApiKey !== null
         && (typeof data.encryptedApiKey !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(data.encryptedApiKey)))) throw new Error();
       return { ...settings, revision: data.revision, encryptedApiKey: data.encryptedApiKey };
@@ -69,11 +74,17 @@ export class DecisionSettingsStore {
   async target(): Promise<DecisionTarget> {
     await this.pending;
     const settings = this.read();
+    let baseUrl: string;
+    try { baseUrl = normalizeModelBaseUrl(settings.baseUrl); }
+    catch (error) {
+      if (error instanceof ModelProviderError) throw new DecisionError(error.message, 'CONFIG_REQUIRED');
+      throw error;
+    }
     const apiKey = settings.encryptedApiKey
       ? await this.secrets.decrypt(Buffer.from(settings.encryptedApiKey, 'base64'))
       : settings.baseUrl === JEV_BASE_URL ? normalizeModelApiKey(this.environmentKey()) : undefined;
     if (!apiKey) throw new DecisionError('请在智能阅读设置中填写 Jev API Key。', 'CONFIG_REQUIRED');
-    return { baseUrl: settings.baseUrl, model: settings.model, apiKey };
+    return { baseUrl, model: settings.model, apiKey };
   }
 }
 export const decisionSettings = new DecisionSettingsStore();

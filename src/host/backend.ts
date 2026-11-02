@@ -21,7 +21,7 @@ export class CatpawBackend {
   private logs = '';
   private modelRequests = new Map<string, AbortController>();
   public availableMethods: readonly string[] = [];
-  constructor(readonly dataDir: string, private readonly options: { electronPath?: string; disableScheduler?: boolean;
+  constructor(readonly dataDir: string, private readonly options: { electronPath?: string; disableScheduler?: boolean; disableAutomaticBackups?: boolean;
     harnessModel?: { model: string; generate: ModelGenerator } } = {}) {}
 
   async start(): Promise<void> {
@@ -31,7 +31,8 @@ export class CatpawBackend {
       const require = createRequire(import.meta.url);
       const executable = this.options.electronPath ?? require('electron') as string;
       const env: NodeJS.ProcessEnv = { ...process.env, CATPAW_USER_DATA_DIR: this.dataDir,
-        ...(this.options.disableScheduler ? { CATPAW_DISABLE_SCHEDULER: '1' } : {}) };
+        CATPAW_DISABLE_SCHEDULER: this.options.disableScheduler ? '1' : '0',
+        CATPAW_DISABLE_AUTOMATIC_BACKUPS: this.options.disableAutomaticBackups ? '1' : '0' };
       delete env.ELECTRON_RUN_AS_NODE;
       delete env.CATPAW_HARNESS_MODEL;
       delete env.JEV_API_KEY; delete env.TYPESAFE_API_KEY;

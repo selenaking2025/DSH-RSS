@@ -5,9 +5,13 @@ export function createConfirmation() {
   let settle: ((answer: boolean) => void) | undefined;
   const answer = (value: boolean) => { settle?.(value); settle = undefined; listener?.(null); };
   return {
-    ask(question: Question): Promise<boolean> {
-      if (!listener || settle) return Promise.resolve(false);
-      return new Promise(resolve => { settle = resolve; listener!(question); });
+    ask(question: Question, signal?: AbortSignal): Promise<boolean> {
+      if (!listener || settle || signal?.aborted) return Promise.resolve(false);
+      return new Promise(resolve => {
+        const cancel = () => answer(false);
+        settle = value => { signal?.removeEventListener('abort', cancel); resolve(value); };
+        signal?.addEventListener('abort', cancel, { once: true }); listener!(question);
+      });
     },
     answer,
     subscribe(next: (question: Question | null) => void) {

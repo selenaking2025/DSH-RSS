@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ON_MY_MAC_GROUP_NAMES, FEED_DISCOVERY_SOURCE_LABELS } from '../constants';
-import { inferPrimaryGroupName } from '../utils';
-import type { FeedRunDiagnostic, SourceEndpointHealth, XApiFallbackStatus } from '../types';
+import { useEffect, useState } from 'react';
+import type { XApiFallbackStatus } from '../types';
 import { useDialogFeedback } from './feedback';
-import type { DialogProps, OpmlPreviewState, FeedDiscoveryCandidate } from './types';
+import type { DialogProps } from './types';
+import { FeedUrlChangeResult } from './FeedUrlChangeResult';
 
 export function EditFeedDialog(props: DialogProps['edit-feed']) {
 const { feed, groupOptions, onDelete: handleDeleteFeed, onHealth: openSourceHealth } = props;
-const { onClose, onChanged, notify } = props;
-const { reportError, clearError, error } = useDialogFeedback(notify);
+const { onClose, onChanged } = props;
+const { reportError, clearError, error } = useDialogFeedback();
 const editingFeedId = feed.id;
 const editingFeedOriginalUrl = feed.url;
 const [editFeedUrl, setEditFeedUrl] = useState(feed.url);
@@ -17,6 +16,7 @@ const [editFeedFolderId, setEditFeedFolderId] = useState<string | null>(feed.gro
 const [editFeedEnabled, setEditFeedEnabled] = useState(feed.enabled !== 0);
 const [editFeedIntervalMinutes, setEditFeedIntervalMinutes] = useState<number | null>(feed.fetchIntervalMinutes ?? null);
 const [updatingFeed, setUpdatingFeed] = useState(false);
+const [savedChange, setSavedChange] = useState<{ backupPath: string; warning?: string } | null>(null);
 const [xApiFallbackStatus, setXApiFallbackStatus] = useState<XApiFallbackStatus | null>(null);
 const [updatingXApiFallback, setUpdatingXApiFallback] = useState(false);
 const loadXApiFallbackStatus = async (feedId: string) => {
@@ -49,13 +49,13 @@ const handleToggleXApiFallback = async () => {
     }
   };
 const handleSubmitEditFeed = async () => {
-    if (!window.catpaw || !editingFeedId) return;
+    if (!window.catpaw || !editingFeedId || updatingFeed) return;
     if (!editFeedUrl.trim()) return;
     const urlChanged = editFeedUrl.trim() !== editingFeedOriginalUrl;
     if (
       urlChanged
       && !window.confirm(
-        '确定修改这个订阅源的地址吗？Catpaw 会先删除它已缓存的旧文章，然后从新地址重新刷新并重建历史。',
+        '确定修改这个订阅源的地址吗？已有文章、收藏、摘要和译文会保留。Catpaw 会先备份整个阅读库，再从新地址同步；备份失败则不修改。需要撤销时，可在「应用与数据 → 从备份恢复」中恢复修改前的完整阅读库。',
       )
     ) {
       return;
@@ -74,6 +74,11 @@ const handleSubmitEditFeed = async () => {
       });
       if (!result?.ok) {
         reportError('更新订阅源失败', result?.error);
+        return;
+      }
+      if (result.backupPath) {
+        setSavedChange({ backupPath: result.backupPath, warning: result.warning });
+        await onChanged();
         return;
       }
       if (result.warning) {
@@ -97,6 +102,7 @@ const handleSubmitEditFeed = async () => {
   };
 
 useEffect(() => { void loadXApiFallbackStatus(feed.id); }, [feed.id]);
+if (savedChange) return <FeedUrlChangeResult {...savedChange} onClose={onClose} />;
 return (
 <div className="modal-overlay" role="dialog" aria-modal="true">
           <div className="modal-card">
@@ -111,6 +117,7 @@ return (
                   autoFocus
                 />
               </label>
+              <p>修改地址会保留已有文章、收藏、摘要和译文，并自动备份修改前的完整阅读库。</p>
               <label className="modal-row">
                 <span>名称:</span>
                 <input
@@ -230,7 +237,7 @@ return (
                 onClick={handleSubmitEditFeed}
                 disabled={updatingFeed || !editFeedUrl.trim()}
               >
-                保存
+                {updatingFeed ? '正在保存并同步…' : '保存'}
               </button>
             </div>
           </div>

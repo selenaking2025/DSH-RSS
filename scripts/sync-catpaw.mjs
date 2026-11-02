@@ -1,30 +1,34 @@
-import { cp, mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
-import { resolve, join, relative } from 'node:path';
-import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
+import { parseArgs } from 'node:util';
+import { exportSource, verifySnapshot, compareSources, replaceSnapshot, readJson, reportMarkdown } from './lib/catpaw-source.mjs';
+import { planPluginVersion, applyPluginVersion } from './lib/catpaw-version.mjs';
 
-const source = resolve(process.argv[2] ?? '../catpaw');
+const { values, positionals } = parseArgs({ allowPositionals: true, options: {
+  ref: { type: 'string', default: 'HEAD' }, check: { type: 'boolean', default: false },
+  report: { type: 'string', default: 'output/catpaw-sync' },
+} });
+if (positionals.length > 1) throw new Error('用法：npm run sync:catpaw -- [Catpaw目录] [--ref 提交或标签] [--check]');
+const source = resolve(positionals[0] ?? '../catpaw');
 const destination = resolve('vendor/catpaw');
-await mkdir(destination, { recursive: true });
-for (const dir of ['electron', 'renderer']) {
-  await rm(join(destination, dir), { recursive: true, force: true });
-  await cp(join(source, dir === 'renderer' ? 'renderer/src' : dir), join(destination, dir === 'renderer' ? 'renderer/src' : dir), {
-    recursive: true, filter: file => !file.split('/').some(part => ['tests', 'node_modules', '.DS_Store'].includes(part)),
-  });
-}
-for (const file of ['package.json', 'THIRD_PARTY_NOTICES.txt']) await cp(join(source, file), join(destination, file));
-const hashes = {};
-async function scan(dir) {
-  for (const file of await readdir(dir, { withFileTypes: true })) {
-    const path = join(dir, file.name);
-    if (file.isDirectory()) await scan(path);
-    else if (file.name !== 'SOURCE.json') hashes[relative(destination, path)] = createHash('sha256').update(await readFile(path)).digest('hex');
+await verifySnapshot(destination);
+const policy = await readJson('catpaw.config.json');
+const imported = await exportSource(source, values.ref, resolve('vendor'));
+try {
+  const report = await compareSources(destination, imported.directory, policy);
+  const sourceNeedsUpdate = report.needsUpdate;
+  report.pluginVersion = await planPluginVersion(source, values.ref, imported.manifest.version);
+  report.needsUpdate ||= report.pluginVersion.needsUpdate;
+  const prefix = resolve(values.report);
+  await mkdir(dirname(prefix), { recursive: true });
+  await writeFile(`${prefix}.json`, `${JSON.stringify(report, null, 2)}\n`);
+  await writeFile(`${prefix}.md`, reportMarkdown(report));
+  if (!values.check) {
+    if (sourceNeedsUpdate) await replaceSnapshot(imported.directory, destination);
+    await applyPluginVersion(report.pluginVersion);
   }
-}
-await scan(destination);
-await writeFile(join(destination, 'SOURCE.json'), JSON.stringify({
-  project: 'Catpaw', revision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: source, encoding: 'utf8' }).trim(),
-  sourceChanges: execFileSync('git', ['status', '--short'], { cwd: source, encoding: 'utf8' }).trim().split('\n'),
-  files: hashes,
-}, null, 2) + '\n');
-console.log(`Imported ${Object.keys(hashes).length} Catpaw source files.`);
+  console.log(`${values.check ? '检查' : '同步'} Catpaw ${report.after.version} (${report.after.revision.slice(0, 12)})：${report.needsUpdate ? '有更新' : '已是当前提交'}。`);
+  console.log(`插件版本：${report.pluginVersion.before} → ${report.pluginVersion.after}（${report.pluginVersion.source === 'local-package' ? '跟随本地 Catpaw package.json' : '跟随指定提交'}）。`);
+  console.log(`新增 ${report.files.added.length}，修改 ${report.files.changed.length}，删除 ${report.files.removed.length}；需检查 ${report.reviewRequired.length} 个适配边界。`);
+  console.log(`报告：${prefix}.md\n功能源码只读取已提交内容；版本号按上述来源同步。`);
+} finally { await imported.cleanup(); }

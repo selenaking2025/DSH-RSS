@@ -38,7 +38,9 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
 
 export class ModelProviderError extends Error {}
 
-export function normalizeModelBaseUrl(value: string): string {
+// Storage reads preserve old HTTP endpoints so users can edit or remove them.
+// Saving settings and making requests must use normalizeModelBaseUrl instead.
+export function parseStoredModelBaseUrl(value: string): string {
   try {
     if (typeof value !== 'string' || value.length > 2048) throw new Error();
     const url = new URL(value.trim());
@@ -47,6 +49,18 @@ export function normalizeModelBaseUrl(value: string): string {
   } catch {
     throw new ModelProviderError('请输入完整的 HTTP(S) API 地址，不要在地址中填写密钥、查询参数或片段。');
   }
+}
+
+export function normalizeModelBaseUrl(value: string): string {
+  const baseUrl = parseStoredModelBaseUrl(value);
+  const url = new URL(baseUrl);
+  // Check the parsed host, never a prefix or a DNS lookup. URL canonicalizes IP literals.
+  const loopback = url.hostname === 'localhost' || url.hostname === '[::1]'
+    || /^127\.\d+\.\d+\.\d+$/.test(url.hostname);
+  if (url.protocol === 'http:' && !loopback) {
+    throw new ModelProviderError('远程模型服务必须使用 HTTPS；只有本机回环地址（localhost、127.x.x.x 或 [::1]）可以使用 HTTP。');
+  }
+  return baseUrl;
 }
 
 export function normalizeModelApiKey(value?: string): string | undefined {
@@ -67,7 +81,7 @@ export function normalizeModelIds(models: string[]): string[] {
   return [...new Set(models.map((model) => model.trim()))];
 }
 
-export function normalizeModelProvider(input: SaveModelProviderInput): SaveModelProviderInput {
+export function parseStoredModelProvider(input: SaveModelProviderInput): SaveModelProviderInput {
   if (!['builtin', 'custom'].includes(input.kind)) throw new ModelProviderError('提供方类型无效。');
   if (typeof input.id !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(input.id)) {
     throw new ModelProviderError('提供方 ID 应以小写字母开头，只使用小写字母、数字和短横线，最多 64 个字符。');
@@ -81,8 +95,13 @@ export function normalizeModelProvider(input: SaveModelProviderInput): SaveModel
   if (input.kind === 'custom' && preset) throw new ModelProviderError('这个 ID 已用于预设提供方，请换一个。');
   return {
     id: input.id, kind: input.kind, displayName: preset?.displayName ?? input.displayName.trim(),
-    apiStyle: input.apiStyle, baseUrl: normalizeModelBaseUrl(input.baseUrl), models: normalizeModelIds(input.models),
+    apiStyle: input.apiStyle, baseUrl: parseStoredModelBaseUrl(input.baseUrl), models: normalizeModelIds(input.models),
     ...(input.editingId === undefined ? {} : { editingId: input.editingId }),
     apiKey: normalizeModelApiKey(input.apiKey),
   };
+}
+
+export function normalizeModelProvider(input: SaveModelProviderInput): SaveModelProviderInput {
+  const provider = parseStoredModelProvider(input);
+  return { ...provider, baseUrl: normalizeModelBaseUrl(provider.baseUrl) };
 }

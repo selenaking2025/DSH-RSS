@@ -79,6 +79,7 @@ export async function requestDecision(target: DecisionTarget, state: unknown, qu
     const started = Date.now();
     try {
       response = await fetchWithTimeout(url, { method: 'POST', redirect: 'manual', signal,
+        bypassProxy: url.startsWith('http:'),
         headers: { Authorization: `Bearer ${target.apiKey}`, 'Content-Type': 'application/json', Accept: 'application/json' },
         body, maxBytes: 1024 * 1024 }, 45_000);
     } catch (error) {

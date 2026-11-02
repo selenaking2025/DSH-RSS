@@ -1,5 +1,8 @@
 import { fetchWithTimeout } from '../network/http';
 import { normalizeModelBaseUrl, type ModelApiStyle } from '../contracts/model-providers';
+import { MODEL_OUTPUT_TOKEN_LIMIT } from '../contracts/model-usage';
+import { modelUsageStore } from './model-usage-store';
+import { reportedModelTokens } from './model-token-usage';
 
 export type ModelTextTarget = { baseUrl: string; apiStyle: ModelApiStyle; model: string; apiKey?: string };
 export class ModelTextError extends Error {
@@ -13,20 +16,20 @@ function requestBody(target: ModelTextTarget, system: string, content: string) {
     headers['anthropic-version'] = '2023-06-01';
     if (target.apiKey) headers['x-api-key'] = target.apiKey;
     return { url: `${base}/messages`, headers, body: {
-      model: target.model, system, max_tokens: 8192, messages: [{ role: 'user', content }],
+      model: target.model, system, max_tokens: MODEL_OUTPUT_TOKEN_LIMIT, messages: [{ role: 'user', content }],
     } };
   }
   if (target.apiStyle === 'gemini') {
     if (target.apiKey) headers['x-goog-api-key'] = target.apiKey;
     return { url: `${base}/models/${encodeURIComponent(target.model)}:generateContent`, headers, body: {
       systemInstruction: { parts: [{ text: system }] }, contents: [{ role: 'user', parts: [{ text: content }] }],
-      generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json' },
+      generationConfig: { maxOutputTokens: MODEL_OUTPUT_TOKEN_LIMIT, responseMimeType: 'application/json' },
     } };
   }
   if (target.apiKey) headers.Authorization = `Bearer ${target.apiKey}`;
   return { url: `${base}/chat/completions`, headers, body: {
     model: target.model, stream: false,
-    ...(/^(gpt-5|o\d)/.test(target.model) ? { max_completion_tokens: 8192 } : { max_tokens: 8192 }),
+    ...(/^(gpt-5|o\d)/.test(target.model) ? { max_completion_tokens: MODEL_OUTPUT_TOKEN_LIMIT } : { max_tokens: MODEL_OUTPUT_TOKEN_LIMIT }),
     messages: [{ role: 'system', content: system }, { role: 'user', content }],
   } };
 }
@@ -59,10 +62,16 @@ function responseText(payload: any, style: ModelApiStyle, task: string): string 
 export async function requestModelText(target: ModelTextTarget, system: string, content: string, signal: AbortSignal, task: string) {
   signal.throwIfAborted();
   const request = requestBody(target, system, content);
+  const body = JSON.stringify(request.body);
+  // Byte-based input estimate plus protocol overhead and the full output allowance.
+  // Provider tokenization/pricing may vary; this is a local usage guard, not a currency bill.
+  const settle = modelUsageStore.reserve(Buffer.byteLength(body, 'utf8') + 1024 + MODEL_OUTPUT_TOKEN_LIMIT);
   let response: Response;
   try {
     response = await fetchWithTimeout(request.url, {
-      method: 'POST', headers: request.headers, body: JSON.stringify(request.body), signal,
+      method: 'POST', headers: request.headers, body, signal,
+      // Validated HTTP targets are local; a proxy would expose their key and article.
+      bypassProxy: request.url.startsWith('http:'),
       redirect: 'manual', maxBytes: 2 * 1024 * 1024,
     }, 90_000);
   } catch (error) {
@@ -74,5 +83,8 @@ export async function requestModelText(target: ModelTextTarget, system: string, 
   if (response.status === 429) throw new ModelTextError(`${task}服务额度不足或请求过于频繁，请稍后重试。`);
   if (response.status >= 300 && response.status < 400) throw new ModelTextError(`${task}服务地址发生跳转，请在 API Key 设置中填写最终 API 地址。`);
   if (!response.ok) throw new ModelTextError(`${task}服务返回错误（HTTP ${response.status}），请检查所选模型和 API 设置。`);
-  return responseText(await response.json().catch(() => null), target.apiStyle, task);
+  const payload: unknown = await response.json().catch(() => null);
+  // Record usage even when output parsing fails and translation subsequently retries.
+  settle(reportedModelTokens(payload, target.apiStyle));
+  return responseText(payload, target.apiStyle, task);
 }

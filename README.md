@@ -2,20 +2,20 @@
 
 将 Catpaw 阅读器接入 DeepSeek Harness：在侧栏阅读 RSS，并让会话中的 AI 查询阅读资料。阅读页面与 AI 工具使用同一个后台和独立数据目录。插件包名称为 `dsh-catpaw`。
 
-当前版本为 **0.1.0**，适配 **DeepSeek Harness 0.2.1-rc.2**，已在 macOS / Apple Silicon 上验证。安装前可用 `dsh --version` 核对 Harness 版本；详细验证记录见 [VALIDATION.md](VALIDATION.md)。
+当前已发布版本为 **0.1.6**；本地生成的插件版本跟随 Catpaw，包含可追踪的 Catpaw 更新流程、自动备份及新版模型用量适配。适配 **DeepSeek Harness 0.2.1-rc.2**。安装前可用 `dsh --version` 核对 Harness 版本；详细验证记录见 [VALIDATION.md](VALIDATION.md)。
 
 ## 下载与安装
 
-**[下载插件安装包 dsh-catpaw-0.1.0.tgz](https://github.com/selenaking2025/DSH-RSS/releases/download/v0.1.0/dsh-catpaw-0.1.0.tgz)** · [查看发布说明与所有附件](https://github.com/selenaking2025/DSH-RSS/releases/tag/v0.1.0) · [所有版本](https://github.com/selenaking2025/DSH-RSS/releases)
+**[下载插件安装包 dsh-catpaw-0.1.6.tgz](https://github.com/selenaking2025/DSH-RSS/releases/download/v0.1.6/dsh-catpaw-0.1.6.tgz)** · [查看发布说明与所有附件](https://github.com/selenaking2025/DSH-RSS/releases/tag/v0.1.6) · [所有版本](https://github.com/selenaking2025/DSH-RSS/releases)
 
 普通用户下载上面的 `.tgz` 文件即可，无需克隆仓库或自行构建。保留文件原样，不要解压；Release 页面自动生成的 **Source code** 是源码归档。
 
 ### 在 Harness 桌面版中安装
 
 1. 安装并打开 **DeepSeek Harness 0.2.1-rc.2**。
-2. 下载 `dsh-catpaw-0.1.0.tgz`，保存到运行 Harness 的电脑上。
+2. 下载 `dsh-catpaw-0.1.6.tgz`，保存到运行 Harness 的电脑上。
 3. 在 Harness 侧栏点击 **插件 → 添加插件**。
-4. 在 **包名或地址** 中粘贴安装包的完整路径，例如 `/Users/你的用户名/Downloads/dsh-catpaw-0.1.0.tgz`。macOS 可在 Finder 中选中文件，按 **⌥⌘C** 复制路径。
+4. 在 **包名或地址** 中粘贴安装包的完整路径，例如 `/Users/你的用户名/Downloads/dsh-catpaw-0.1.6.tgz`。macOS 可在 Finder 中选中文件，按 **⌥⌘C** 复制路径。
 5. 点击 **安装**，完成后点击 **立即启用**。如果界面提示需要重启，重新打开 Harness。
 6. 点击侧栏 **Catpaw**，通过添加按钮新建 RSS 订阅，或导入 OPML 订阅列表。
 
@@ -54,15 +54,19 @@ npm run dev
 ## 从源码打包与命令行安装
 
 ```sh
+# 默认从相邻的 ../catpaw 同步、验证并打包
 npm run pack:plugin
+
+# Catpaw 在其他目录时指定路径
+npm run pack:plugin -- /绝对路径/catpaw
 ```
 
-生成 `output/dsh-catpaw-0.1.0.tgz`。在 **0.2.1-rc.2** 的 Harness 插件管理器中安装此文件；不要对其他宿主版本强制放行版本检查。
+安装包版本直接采用本地 Catpaw 的 `package.json` 版本：Catpaw 为 `0.1.6` 时生成 `output/dsh-catpaw-0.1.6.tgz`，更新到 `0.1.7` 后生成 `output/dsh-catpaw-0.1.7.tgz`。无需手动修改插件版本；同步或验证失败时停止打包。下方安装命令以 `0.1.6` 为例，实际使用本次日志中的文件名。在 **0.2.1-rc.2** 的 Harness 插件管理器中安装此文件；不要对其他宿主版本强制放行版本检查。
 
 已安装 Harness 桌面版时，使用桌面版附带的 `dsh` 命令安装到 `desktop` 配置：
 
 ```sh
-dsh plugin --profile desktop add /绝对路径/dsh-catpaw-0.1.0.tgz
+dsh plugin --profile desktop add /绝对路径/dsh-catpaw-0.1.6.tgz
 ```
 
 重新打开 Harness，点击侧栏 **Catpaw** 即可进入阅读器。点击添加按钮新建订阅源，或通过 OPML 导入订阅。桌面版的 `desktop` 配置由应用启动，不能用 `dsh --profile desktop` 启动。安装方式参见 [官方插件安装说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)。
@@ -70,7 +74,7 @@ dsh plugin --profile desktop add /绝对路径/dsh-catpaw-0.1.0.tgz
 独立 Web 版应安装到它实际使用的配置，例如：
 
 ```sh
-dsh plugin --profile web add /绝对路径/dsh-catpaw-0.1.0.tgz
+dsh plugin --profile web add /绝对路径/dsh-catpaw-0.1.6.tgz
 ```
 
 此插件需要 Electron 运行时和 SQLite 原生组件。当前版本的 SQLite 包自带预编译组件，Electron 会在首次使用时下载运行时。若安装界面列出待允许的脚本，仅允许该次安装实际列出的所需依赖后重试，不要全局放开安装脚本。本项目使用固定的 pnpm 11.7.0，`npm run dev` 自动优先使用它；桌面版 CLI 使用应用自带的 pnpm。
@@ -123,11 +127,17 @@ dsh plugin --profile web add /绝对路径/dsh-catpaw-0.1.0.tgz
 ## 开发与验证
 
 ```sh
-npm run sync:catpaw -- /绝对路径/catpaw
+# 本地一键同步、验证并打包
+npm run update:catpaw -- /绝对路径/catpaw
+
+# 也可分步执行
+npm run check:upstream -- /绝对路径/catpaw
+npm run sync:catpaw -- /绝对路径/catpaw --ref <提交号或标签>
+npm run sync:catpaw:deps
 npm run check
 ```
 
-`vendor/catpaw/SOURCE.json` 记录导入提交、当时的工作区变更和每个文件的 SHA-256。原 Catpaw 仓库不被修改。构建将源码复制到 `.generated/` 后应用适配；受适配的原文结构发生变化时，构建会要求检查对应适配脚本。
+`vendor/catpaw/SOURCE.json` 记录导入提交、该提交的版本号和每个文件的 SHA-256。功能源码只读取已提交内容；默认版本号读取本地 Catpaw 的 `package.json`，即使版本修改尚未提交也会同步。显式指定其他 `--ref` 时，版本跟随该提交，便于复现旧版。原 Catpaw 仓库不被修改。构建将源码复制到 `.generated/` 后应用适配；上游适配边界、依赖或接口发生变化时，检查会要求处理后再打包。完整本地更新步骤和回退方式见 [跟随 Catpaw 更新](docs/CATPAW-UPDATES.md)。
 
 | 位置 | 作用 |
 | --- | --- |

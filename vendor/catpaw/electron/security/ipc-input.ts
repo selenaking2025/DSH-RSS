@@ -1,5 +1,6 @@
 import type { RssBridge, RssInvokeMethod } from '../contracts/rss';
 import { isThemePreference } from '../contracts/appearance';
+import { isDailyModelTokenLimit } from '../contracts/model-usage';
 type Rule = (value: unknown) => boolean;
 const text: Rule = (v) => typeof v === 'string' && v.length > 0 && v.length <= 4096;
 const id: Rule = (v) => typeof v === 'string' && v.length > 0 && v.length <= 200;
@@ -66,9 +67,15 @@ export const rssInputRules = {
   cancelActiveJobs: { args: [], changesState: true },
   getEnrichmentQueueStatus: { args: [], changesState: false },
   openWeChatLogin: { args: [], changesState: true },
+  verifyLinuxDo: { args: [], changesState: false },
   exportOpml: { args: [], changesState: true },
   getAppStatus: { args: [], changesState: false },
   backupDatabase: { args: [], changesState: true },
+  getAutomaticBackupStatus: { args: [], changesState: false },
+  setAutomaticBackupEnabled: { args: [bool], changesState: false },
+  chooseAutomaticBackupDirectory: { args: [], changesState: false },
+  resetAutomaticBackupDirectory: { args: [], changesState: false },
+  runAutomaticBackup: { args: [], changesState: false },
   restoreDatabase: { args: [], changesState: true },
   exportDiagnostics: { args: [], changesState: true },
   getUpdateStatus: { args: [], changesState: false },
@@ -101,6 +108,8 @@ export const rssInputRules = {
   previewOpml: { args: [optional(object({ groupId: nullable(id), token: nullable(id) }))], changesState: false },
   importOpml: { args: [optional(object({ groupId: nullable(id), token: nullable(id) }))], changesState: true },
   listModelProviders: { args: [], changesState: false },
+  getModelUsage: { args: [], changesState: false },
+  setModelDailyTokenLimit: { args: [isDailyModelTokenLimit], changesState: false },
   removeModelProvider: { args: [modelId], changesState: true },
   saveModelProvider: { args: [object({ id: modelId, editingId: modelId,
   kind: (v) => v === 'builtin' || v === 'custom', displayName: text, baseUrl: text, apiStyle, apiKey,

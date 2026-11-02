@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ensureUserDataDir } from '../runtime';
 import { localProviderSecrets } from './local-provider-secrets';
-import { ModelProviderError, normalizeModelApiKey, normalizeModelBaseUrl, normalizeModelProvider,
+import { ModelProviderError, normalizeModelApiKey, normalizeModelBaseUrl, normalizeModelProvider, parseStoredModelProvider,
   type DiscoverProviderModelsInput, type ModelProvider, type SaveModelProviderInput } from '../contracts/model-providers';
 
 type StoredProvider = Omit<ModelProvider, 'keyConfigured' | 'keyNeedsReentry'> & { encryptedApiKey: string | null };
@@ -36,7 +36,7 @@ export class ModelProviderStore {
         if (!provider || typeof provider !== 'object' || Object.keys(provider).some((key) => ![
           'id', 'kind', 'displayName', 'apiStyle', 'baseUrl', 'models', 'encryptedApiKey',
         ].includes(key))) throw new Error();
-        const { apiKey: _key, editingId: _editingId, ...metadata } = normalizeModelProvider(provider);
+        const { apiKey: _key, editingId: _editingId, ...metadata } = parseStoredModelProvider(provider);
         if (seen.has(metadata.id)) throw new Error();
         seen.add(metadata.id);
         if (provider.encryptedApiKey !== null && (typeof provider.encryptedApiKey !== 'string'
@@ -107,6 +107,7 @@ export class ModelProviderStore {
   }
 
   async discoveryKey(input: DiscoverProviderModelsInput): Promise<string | undefined> {
+    const baseUrl = normalizeModelBaseUrl(input.baseUrl);
     const supplied = normalizeModelApiKey(input.apiKey);
     if (supplied) return supplied;
     if (!input.providerId) return undefined;
@@ -116,7 +117,7 @@ export class ModelProviderStore {
       if (!saved) throw new ModelProviderError('提供方已移除，请重新打开设置。');
       if (!saved.encryptedApiKey) return undefined;
       // Never send a retained credential to a changed endpoint or protocol.
-      if (saved.baseUrl !== normalizeModelBaseUrl(input.baseUrl) || saved.apiStyle !== input.apiStyle) {
+      if (saved.baseUrl !== baseUrl || saved.apiStyle !== input.apiStyle) {
         throw new ModelProviderError('API 地址或协议已更改，请重新输入用于此服务的 API Key。');
       }
       // Reading old credentials must not trigger system authentication or change the saved file.

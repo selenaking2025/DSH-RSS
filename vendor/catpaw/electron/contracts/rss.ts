@@ -6,9 +6,11 @@ import type { RssRunOutcome } from './feed-run';
 import type { ModelProvider, ModelProviderResult, SaveModelProviderInput, DiscoverProviderModelsInput } from './model-providers';
 import type { TranslateArticleInput, TranslateArticleResult, TranslationProgress } from './translation';
 import type { ArticleSummary, ArticleSummaryResult, SummarizeArticleInput } from './article-summary';
+import type { ModelUsageStatus } from './model-usage';
 import type { ThemePreference } from './appearance';
 import type { ReaderStateChange } from './reader-events';
 import type { MaintenanceStatus } from './maintenance';
+import type { AutomaticBackupStatus } from './automatic-backup';
 import type { AppUpdateStatus, AppUpdateResult } from './app-update';
 import type { DecisionSettings, SaveDecisionSettings } from './decision';
 import type { ReadingFocus, SaveReadingFocus, ReadingFeedback, ReadingRunInput, ReadingStatus, ReadingSnapshot, ReadingQuery, ReadingChange, ReadingResult } from './smart-reading';
@@ -34,11 +36,18 @@ export type RssBridge = {
   cancelArticleTranslation: (requestId: string) => Promise<void>;
   onTranslationProgress: (listener: (progress: TranslationProgress) => void) => () => void;
   listModelProviders: () => Promise<ModelProviderResult<ModelProvider[]>>;
+  getModelUsage: () => Promise<ModelProviderResult<ModelUsageStatus>>;
+  setModelDailyTokenLimit: (limit: number | null) => Promise<ModelProviderResult<ModelUsageStatus>>;
   saveModelProvider: (input: SaveModelProviderInput) => Promise<ModelProviderResult<ModelProvider[]>>;
   removeModelProvider: (id: string) => Promise<ModelProviderResult<ModelProvider[]>>;
   discoverProviderModels: (input: DiscoverProviderModelsInput) => Promise<ModelProviderResult<string[]>>;
   getAppStatus: () => Promise<{ version: string; electron: string; schema: number; packaged: boolean }>;
   backupDatabase: () => Promise<{ ok: boolean; error?: string; filePath?: string }>;
+  getAutomaticBackupStatus: () => Promise<AutomaticBackupStatus>;
+  setAutomaticBackupEnabled: (enabled: boolean) => Promise<AutomaticBackupStatus>;
+  chooseAutomaticBackupDirectory: () => Promise<AutomaticBackupStatus>;
+  resetAutomaticBackupDirectory: () => Promise<AutomaticBackupStatus>;
+  runAutomaticBackup: () => Promise<AutomaticBackupStatus>;
   restoreDatabase: () => Promise<{ ok: boolean; error?: string }>;
   exportDiagnostics: () => Promise<{ ok: boolean; error?: string; filePath?: string }>;
   rebuildSearchIndex: () => Promise<{ ok: boolean; entries: number }>;
@@ -213,6 +222,7 @@ export type RssBridge = {
   fetchEntryContent: (id: string) => Promise<{ ok: boolean; error?: string }>;
   resolveXiaoyuzhouAudio: (id: string) => Promise<{ ok: boolean; mediaUrl?: string; error?: string }>;
   openWeChatLogin: () => Promise<{ ok: boolean; error?: string; alreadyOpen?: boolean }>;
+  verifyLinuxDo: () => Promise<{ ok: boolean; error?: string }>;
   getSocialThread: (id: string) => Promise<{
     ok: boolean;
     error?: string;
@@ -290,6 +300,7 @@ export type RssBridge = {
     error?: string;
     warning?: string;
     urlChanged?: boolean;
+    backupPath?: string;
   }>;
   deleteFeed: (id: string) => Promise<{ ok: boolean; error?: string }>;
   previewOpml: (options?: {

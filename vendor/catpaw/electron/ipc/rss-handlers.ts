@@ -1,12 +1,12 @@
 import { BrowserWindow, dialog } from 'electron';
-import type { OpenDialogOptions, SaveDialogOptions } from 'electron';
+import type { OpenDialogOptions, SaveDialogOptions, WebContents } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { ipcMain } from './register';
 import { getMainWindow } from '../desktop-window';
 import { exportOpml } from '../services/opml';
 import { runMaintenance } from '../services/maintenance';
+import { OpmlPreviewCache } from '../services/opml-preview-cache';
 import { deleteFeed } from '../data/feed-write-repo';
 import { countEntries, getFeedUnreadCounts } from '../data/entry-read-repo';
 import { getEntry, listEntries, markEntryRead, markAllEntriesRead, toggleEntryStar } from '../data/entry-repo';
@@ -18,6 +18,7 @@ import { hasUserSourceEndpoint, listFeedRunDiagnostics, listFeedSyncStates, list
 import { addSubscription, updateSubscription } from '../services/subscriptions';
 import { openWeChatLogin } from '../providers/reader';
 import { discoverFeeds } from '../providers/feed-discovery';
+import { runBrowserRequest } from '../browser/host';
 import { getRefreshSettings, updateRefreshSettings } from '../data/refresh-settings-repo';
 import { buildXApiTwitterEndpointUrl, getXApiBearerTokenFilePath, isXApiTwitterEnabled, resolveXApiTwitterHandle } from '../providers/x-api-twitter';
 import { readerJobManager } from '../reader-job-manager';
@@ -28,8 +29,20 @@ import { enqueueBackfillAll, enqueueBackfillFeed, enqueueRefreshAll, enqueueRefr
 import { withHistoryDepthDefaults } from '../services/history-options';
 import { runWithSqliteBusyRetry, runWithStorageWriteRetry } from '../services/sqlite-retry';
 import { scheduleNextScheduledRefresh, runDueScheduledRefreshes } from '../services/scheduler';
-const pendingOpmlPreviews = new Map<string, { xml: string; filePath: string; createdAt: number }>();
-const OPML_PREVIEW_TTL_MS = 15 * 60 * 1000;
+const pendingOpmlPreviews = new OpmlPreviewCache();
+const opmlPreviewOwners = new WeakSet<WebContents>();
+
+function watchOpmlPreviewOwner(sender: WebContents) {
+  if (opmlPreviewOwners.has(sender)) return;
+  opmlPreviewOwners.add(sender);
+  const owner = sender.id;
+  sender.once('destroyed', () => pendingOpmlPreviews.discardOwner(owner));
+}
+
+function opmlPreviewError(error: unknown): { ok: false; error: string } {
+  if (error instanceof Error && /^OPML_/.test(error.message)) return { ok: false, error: error.message };
+  throw error;
+}
 const X_API_PROVIDER_TYPE = 'x-api-twitter';
 function getXApiFallbackStatus(feedId: string) {
   const feed = listFeeds().find((item) => item.id === feedId);
@@ -161,6 +174,23 @@ export function registerRssHandlers() {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
+  ipcMain.handle('rss:verifyLinuxDo', async (event) => {
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    const navigating = (_event: Electron.Event, _url: string, _inPlace: boolean, isMainFrame: boolean) => {
+      if (isMainFrame) cancel();
+    };
+    event.sender.once('destroyed', cancel);
+    event.sender.on('did-start-navigation', navigating);
+    try {
+      await runBrowserRequest({ kind: 'linuxdo-login' }, controller.signal);
+      return { ok: true };
+    } catch (error) { return { ok: false, error: error instanceof Error ? error.message : String(error) }; }
+    finally {
+      event.sender.removeListener('destroyed', cancel);
+      event.sender.removeListener('did-start-navigation', navigating);
+    }
+  });
   ipcMain.handle('rss:getSocialThread', async (_event, id: string) => {
     try {
       return await readerJobManager.enqueue({
@@ -229,15 +259,9 @@ export function registerRssHandlers() {
     return result;
   });
   ipcMain.handle('rss:previewOpml', async (event, options?: { groupId?: string | null; token?: string | null }) => {
-    const now = Date.now();
-    for (const [token, pending] of pendingOpmlPreviews) {
-      if (now - pending.createdAt > OPML_PREVIEW_TTL_MS) pendingOpmlPreviews.delete(token);
-    }
-
+    watchOpmlPreviewOwner(event.sender);
     let token = options?.token ?? null;
-    let pending = token ? pendingOpmlPreviews.get(token) : undefined;
-    if (!pending) {
-      if (token) return { ok: false, error: 'OPML_PREVIEW_EXPIRED' as const };
+    if (!token) {
       const parent = BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow() ?? getMainWindow() ?? undefined;
       const dialogOptions: OpenDialogOptions = {
         properties: ['openFile'],
@@ -247,30 +271,30 @@ export function registerRssHandlers() {
       if (result.canceled || result.filePaths.length === 0) {
         return { ok: false, error: 'CANCELLED' as const };
       }
-      const filePath = result.filePaths[0];
-      pending = { xml: await fs.promises.readFile(filePath, 'utf-8'), filePath, createdAt: now };
-      token = randomUUID();
-      pendingOpmlPreviews.set(token, pending);
+      if (event.sender.isDestroyed()) return { ok: false, error: 'CANCELLED' as const };
+      // The dialog keeps only one token. A new selection replaces previews left
+      // behind by closing it; active work retains its quota until it settles.
+      pendingOpmlPreviews.discardOwner(event.sender.id);
+      try {
+        token = await pendingOpmlPreviews.create(result.filePaths[0], event.sender.id);
+      } catch (error) { return opmlPreviewError(error); }
     }
-
-    const requestedGroupId = options?.groupId ?? null;
-    const validRootGroupId = requestedGroupId && listGroups().some((group) => group.id === requestedGroupId) ? requestedGroupId : null;
-    const summary = await runMaintenance('preview', { xml: pending.xml, rootGroupId: validRootGroupId });
-    return { ok: true, token: token ?? undefined, filePath: pending.filePath, fileName: path.basename(pending.filePath), ...summary };
+    return pendingOpmlPreviews.use(token, event.sender.id, false, async (pending) => {
+      const requestedGroupId = options?.groupId ?? null;
+      const validRootGroupId = requestedGroupId && listGroups().some((group) => group.id === requestedGroupId) ? requestedGroupId : null;
+      const summary = await runMaintenance('preview', { xml: pending.xml, rootGroupId: validRootGroupId });
+      return { ok: true, token: token ?? undefined, filePath: pending.filePath, fileName: path.basename(pending.filePath), ...summary };
+    }).catch(opmlPreviewError);
   });
-  ipcMain.handle('rss:importOpml', async (_event, options?: { groupId?: string | null; token?: string | null }) => {
+  ipcMain.handle('rss:importOpml', async (event, options?: { groupId?: string | null; token?: string | null }) => {
     const token = options?.token ?? null;
     if (!token) return { ok: false, error: 'OPML_PREVIEW_REQUIRED' as const };
-    const pending = pendingOpmlPreviews.get(token);
-    if (!pending || Date.now() - pending.createdAt > OPML_PREVIEW_TTL_MS) {
-      pendingOpmlPreviews.delete(token);
-      return { ok: false, error: 'OPML_PREVIEW_EXPIRED' as const };
-    }
-    const requestedGroupId = options?.groupId ?? null;
-    const validRootGroupId = requestedGroupId && listGroups().some((group) => group.id === requestedGroupId) ? requestedGroupId : null;
-    const summary = await runMaintenance('import', { xml: pending.xml, rootGroupId: validRootGroupId });
-    pendingOpmlPreviews.delete(token);
-    return { ok: true, filePath: pending.filePath, fileName: path.basename(pending.filePath), ...summary };
+    return pendingOpmlPreviews.use(token, event.sender.id, true, async (pending) => {
+      const requestedGroupId = options?.groupId ?? null;
+      const validRootGroupId = requestedGroupId && listGroups().some((group) => group.id === requestedGroupId) ? requestedGroupId : null;
+      const summary = await runMaintenance('import', { xml: pending.xml, rootGroupId: validRootGroupId });
+      return { ok: true, filePath: pending.filePath, fileName: path.basename(pending.filePath), ...summary };
+    }).catch(opmlPreviewError);
   });
   ipcMain.handle('rss:exportOpml', async (event) => {
     const parent = BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow() ?? getMainWindow() ?? undefined;

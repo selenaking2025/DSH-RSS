@@ -1,5 +1,14 @@
-.modal-card.model-settings-modal { width: min(540px, 92vw); }
+.modal-card.model-settings-modal { width: min(540px, 92vw); display: flex; flex-direction: column; overflow: hidden; }
+.model-settings-modal .modal-body { min-height: 0; overflow-y: auto; }
+.model-settings-modal .modal-actions { flex-shrink: 0; }
 .model-settings-heading h2 { margin: 0; font-size: 18px; }
 .model-settings-heading p, .model-settings-help p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .model-settings-modal .modal-row { align-items: center; }
 .model-settings-help .modal-button { margin-top: 12px; }
+.model-usage-settings { min-width: 0; margin: 20px 0 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.model-usage-settings legend { padding: 0 6px; font-size: 13px; font-weight: 600; }
+.model-usage-settings p { margin: 6px 0; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.model-usage-settings .model-usage-total { color: var(--text); font-variant-numeric: tabular-nums; font-size: 13px; }
+.model-usage-toggle { display: flex; align-items: center; gap: 8px; margin: 14px 0; font-size: 13px; }
+.model-usage-toggle input { margin: 0; }
+.model-usage-settings .modal-row input { min-width: 0; width: 100%; }

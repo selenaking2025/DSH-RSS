@@ -1,3 +1,10 @@
+.automatic-backup-panel { padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-surface); display: grid; gap: 10px; }
+.automatic-backup-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.automatic-backup-heading h3 { margin: 0; font-size: 14px; }
+.automatic-backup-heading label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.automatic-backup-directory { color: var(--muted); }
+.automatic-backup-error { color: var(--danger); }
+
 .api-keys-modal { width: min(820px, 92vw); padding: 28px; }
 .api-keys-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
 .api-keys-eyebrow { font-size: 12px; color: var(--muted); }
@@ -62,11 +69,20 @@
   .provider-row-info { flex-basis: 100%; }
 }
 
-.modal-card.model-settings-modal { width: min(540px, 92vw); }
+.modal-card.model-settings-modal { width: min(540px, 92vw); display: flex; flex-direction: column; overflow: hidden; }
+.model-settings-modal .modal-.catpaw-body { min-height: 0; overflow-y: auto; }
+.model-settings-modal .modal-actions { flex-shrink: 0; }
 .model-settings-heading h2 { margin: 0; font-size: 18px; }
 .model-settings-heading p, .model-settings-help p { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .model-settings-modal .modal-row { align-items: center; }
 .model-settings-help .modal-button { margin-top: 12px; }
+.model-usage-settings { min-width: 0; margin: 20px 0 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.model-usage-settings legend { padding: 0 6px; font-size: 13px; font-weight: 600; }
+.model-usage-settings p { margin: 6px 0; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.model-usage-settings .model-usage-total { color: var(--text); font-variant-numeric: tabular-nums; font-size: 13px; }
+.model-usage-toggle { display: flex; align-items: center; gap: 8px; margin: 14px 0; font-size: 13px; }
+.model-usage-toggle input { margin: 0; }
+.model-usage-settings .modal-row input { min-width: 0; width: 100%; }
 
 .reading-tabs { display: flex; gap: 3px; padding: 3px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-control); }
 .reading-tabs button { border: 0; border-radius: 5px; padding: 5px 13px; color: var(--muted); background: transparent; cursor: pointer; font: inherit; font-size: 12px; white-space: nowrap; }
@@ -1648,6 +1664,12 @@ textarea::placeholder {
 }
 
 .detail-content {
+  /* This app-owned box bounds every raw/translated article branch. Contain both
+     layout and paint so fixed positioning, stacking and overflow stay inside it.
+     Do not contain size: ordinary long articles must retain their full height. */
+  contain: layout paint;
+  /* Oversized publisher media remains reachable without overflowing the app. */
+  overflow: auto;
   font-size: 16px;
   line-height: 1.85;
   color: var(--text-body);
@@ -2297,6 +2319,15 @@ textarea::placeholder {
   line-height: 1.45;
 }
 
+.linuxdo-verification {
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #8884);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.linuxdo-verification p { margin: 0 0 8px; line-height: 1.5; }
+.linuxdo-verification p[role="alert"] { margin: 8px 0 0; }
+
 .feed-discovery-results {
   display: flex;
   flex-direction: column;
@@ -2510,6 +2541,7 @@ textarea::placeholder {
 }
 
 .source-health-main {
+  grid-column: 2;
   min-width: 0;
   font-size: 12px;
 }
@@ -2527,8 +2559,13 @@ textarea::placeholder {
 }
 
 .source-health-side {
+  grid-column: 3;
   align-items: flex-end;
   font-size: 11px;
+}
+
+.source-health-row > .linuxdo-verification {
+  grid-column: 2 / -1;
 }
 
 .source-health-side .modal-button {

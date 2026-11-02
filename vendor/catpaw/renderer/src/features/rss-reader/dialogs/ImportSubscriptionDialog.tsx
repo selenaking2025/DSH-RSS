@@ -35,10 +35,12 @@ const handlePreviewOpml = async (groupId: string | null, token?: string | null) 
           invalidFeedCount: result.invalidFeedCount ?? 0,
         });
       } else if (result.error && result.error !== 'CANCELLED') {
+        if (result.error !== 'OPML_PREVIEW_BUSY') setOpmlPreview(null);
         reportError('OPML 预览失败', result.error);
       }
       return result;
     } catch (error) {
+      setOpmlPreview(null);
       reportError('OPML 预览失败', error);
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
@@ -55,10 +57,12 @@ const handleImportOpml = async (groupId: string | null, token: string) => {
           void onImported(importedFeedIds);
         }
       } else if (result.error && result.error !== 'CANCELLED') {
+        if (result.error !== 'OPML_PREVIEW_BUSY') setOpmlPreview(null);
         reportError('导入失败', result.error);
       }
       return result;
     } catch (error) {
+      setOpmlPreview(null);
       reportError('导入失败', error);
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }

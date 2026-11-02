@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { FeedRunDiagnostic, SourceEndpointHealth } from '../types';
 import { useDialogFeedback } from './feedback';
 import type { DialogProps } from './types';
+import { LinuxDoVerification } from '../LinuxDoVerification';
+import { friendlyReaderError } from '../errors';
 
 export function SourceHealthDialog(props: DialogProps['health']) {
 const { feedId: sourceHealthFeedId, feedById, onRefresh: startRefresh, onDelete } = props;
@@ -103,7 +105,7 @@ return (
                               {row.endpointRole} · {row.providerType} · {row.endpointHost ?? row.endpointUrl}
                               {row.managedBy === 'user' ? ' · 用户锁定' : ''}
                             </span>
-                            {row.lastError && <span className="source-health-error">{row.lastError}</span>}
+                            {row.lastError && <span className="source-health-error">{friendlyReaderError(row.lastError)}</span>}
                           </div>
                           <div className="source-health-side">
                             <span>{row.endpointStatus}</span>
@@ -128,6 +130,8 @@ return (
                               </button>
                             </div>
                           </div>
+                          <LinuxDoVerification url={row.endpointUrl} disabled={Boolean(retryingEndpointId || deletingFeedId)}
+                            onRetry={() => handleResetAndRetryEndpoint(row)} />
                         </div>
                       ))}
                     </div>
@@ -145,7 +149,7 @@ return (
                           <span>{row.feedTitle ?? row.feedUrl}</span>
                           <span>{row.providerType ?? '未知'} · {row.runType}</span>
                           <span>{new Date(row.finishedAt).toLocaleString()}</span>
-                          {row.error && <span className="source-health-error">{row.error}</span>}
+                          {row.error && <span className="source-health-error">{friendlyReaderError(row.error)}</span>}
                         </div>
                       ))}
                     </div>

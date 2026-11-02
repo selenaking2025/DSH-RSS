@@ -9,17 +9,24 @@ import { ensureUserDataDir, getDbPath } from '../runtime';
 export { CATPAW_DATABASE_ID, validateDatabaseBackup } from './database-snapshot';
 const pendingPath = () => path.join(ensureUserDataDir(), 'pending-restore.json');
 
+export function feedUrlChangeBackupPath() {
+  const directory = path.join(ensureUserDataDir(), 'backups');
+  fs.mkdirSync(directory, { recursive: true });
+  return path.join(directory, `before-feed-url-${new Date().toISOString().replace(/[:.]/g, '-')}-${randomUUID()}.sqlite3`);
+}
+
 export async function backupDatabase(destination: string) {
   if (path.resolve(destination) === path.resolve(getDbPath())) throw new Error('BACKUP_CANNOT_OVERWRITE_ACTIVE_DATABASE');
   // A failed export never leaves a partial file under the user-selected name.
   const temporary = `${destination}.${randomUUID()}.tmp`;
+  fs.closeSync(fs.openSync(temporary, 'wx', 0o600));
   try {
     await getDb().backup(temporary);
     makeStandaloneSnapshot(temporary);
     const summary = validateDatabaseBackup(temporary);
     fs.renameSync(temporary, destination);
     return { ok: true as const, filePath: destination, ...summary };
-  } finally { for (const suffix of ['', '-wal', '-shm']) fs.rmSync(temporary + suffix, { force: true }); }
+  } finally { for (const suffix of ['', '-journal', '-wal', '-shm']) fs.rmSync(temporary + suffix, { force: true }); }
 }
 
 async function checksum(filePath: string) {

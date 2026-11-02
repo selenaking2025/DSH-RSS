@@ -36,6 +36,11 @@ export function splitSummaryText(text: string, limit = CHUNK_SIZE): string[] {
   return chunks;
 }
 
+export function summaryRequestCount(text: string): number {
+  const count = splitSummaryText(text).length;
+  return count > 1 ? count + 1 : 1;
+}
+
 function parseSummary(raw: string, source: string, final: boolean) {
   let value: unknown;
   try { value = JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))?.summary; }

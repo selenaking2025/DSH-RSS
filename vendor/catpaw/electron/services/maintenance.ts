@@ -4,12 +4,20 @@ import { readerJobManager } from '../reader-job-manager';
 import { blockStorageWrites } from './storage-gate';
 import { smartReading } from './smart-reading';
 import type { MaintenanceInputs, MaintenanceKind, MaintenanceStatus } from '../contracts/maintenance';
+import { isShuttingDown } from './shutdown-state';
 
 let waiting: MaintenanceStatus | null = null;
 let tail: Promise<unknown> = Promise.resolve();
+let restorePrepared = false;
 export const getMaintenanceStatus = () => maintenanceJobManager.getStatus() ?? waiting;
 export function runMaintenance<K extends MaintenanceKind>(kind: K, input: MaintenanceInputs[K], keepPaused = false) {
   const run = async () => {
+    if (isShuttingDown()) throw new Error('APP_QUITTING');
+    if (restorePrepared) throw new Error('RESTORE_PENDING_RESTART');
+    // SQLite's online backup produces a consistent snapshot while readers and
+    // writers continue. Verification/retention stay off the main thread and are
+    // serialized with restoration, without pausing normal refresh/reading.
+    if (kind === 'automaticBackup') return maintenanceJobManager.run(kind, input);
     const reading = smartReading.pause();
     const rss = rssJobManager.pause(), reader = readerJobManager.pause();
     let release: (() => void) | undefined;
@@ -17,11 +25,13 @@ export function runMaintenance<K extends MaintenanceKind>(kind: K, input: Mainte
     let completed = false;
     try {
       await Promise.all([reading.drained, rss.drained, reader.drained]);
+      if (isShuttingDown()) throw new Error('APP_QUITTING');
       // A running fetch may still need cancellation while maintenance waits.
       // Block main-process writes only once the child can take the write lock.
       release = blockStorageWrites();
       const result = await maintenanceJobManager.run(kind, input);
       completed = true;
+      if (keepPaused) restorePrepared = true;
       return result;
     } finally {
       waiting = null;

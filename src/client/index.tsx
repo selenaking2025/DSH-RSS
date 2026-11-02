@@ -6,6 +6,7 @@ import { createBridge, type Rpc } from './bridge.ts';
 import { installFileActions } from './files.ts';
 import css from './reader.css';
 import { createConfirmation, Confirmation } from './confirmation.tsx';
+import { installModelConfirmations } from './model-confirmation.ts';
 
 interface ClientContext {
   connection: { rpc: Rpc };
@@ -52,9 +53,10 @@ export function apply(ctx: ClientContext) {
   const bridge = createBridge(ctx.connection.rpc);
   const confirmation = createConfirmation();
   installFileActions(bridge, confirmation.ask);
+  const stopModelConfirmations = installModelConfirmations(bridge, confirmation.ask);
   const unbind = bindReaderBridge(bridge.rss);
   const unbindConfirmation = bindReaderConfirmation(confirmation.ask);
-  ctx.effect(() => () => { unbindConfirmation(); unbind(); bridge.dispose(); }, 'catpaw: browser bridge');
+  ctx.effect(() => () => { stopModelConfirmations(); unbindConfirmation(); unbind(); bridge.dispose(); }, 'catpaw: browser bridge');
   ctx.effect(() => ctx.locale.register('catpaw', { zh: { label: 'Catpaw 阅读器' }, en: { label: 'Catpaw Reader' } }));
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'catpaw', locale: 'catpaw', inject: () => ({ bridge, confirmation }) }, Reader));
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: 'catpaw', order: 20,

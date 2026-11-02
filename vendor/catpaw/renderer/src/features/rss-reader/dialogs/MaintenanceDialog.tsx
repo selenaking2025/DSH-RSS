@@ -5,6 +5,7 @@ import type { DialogProps } from './types';
 import { useMaintenanceProgress } from '../useMaintenanceProgress';
 import { AppUpdatePanel } from '../updates/AppUpdatePanel';
 import { useAppUpdate } from '../updates/useAppUpdate';
+import { AutomaticBackupPanel } from './AutomaticBackupPanel';
 export function MaintenanceDialog({ onClose, onChanged }: DialogProps['maintenance']) {
   const [status, setStatus] = useState<Awaited<ReturnType<RssBridge['getAppStatus']>> | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,7 +32,9 @@ export function MaintenanceDialog({ onClose, onChanged }: DialogProps['maintenan
       <h2 id="maintenance-title">应用与数据</h2><p>Catpaw {status?.version ?? '…'}</p>
       <AppUpdatePanel disabled={busy} />
       <p>阅读数据备份包含订阅与来源设置、文章、摘要和译文、已读、收藏及刷新设置。</p>
+      <p>修改订阅地址前会自动保存完整备份。从备份恢复会打开备份文件夹，选择对应时间的 before-feed-url 文件即可恢复修改前的地址和阅读数据。恢复会回退整个阅读库，当前数据会另存一份备份。</p>
       <p>模型提供方配置、API 密钥和登录状态不在备份中。迁移到另一台电脑后，需要重新配置模型并登录相关来源。</p>
+      <AutomaticBackupPanel disabled={blocked} />
       <div className="modal-actions">
         <button className="modal-button" disabled={blocked} onClick={() => void run(api.backupDatabase, '备份已保存')}>备份阅读数据</button>
         <button className="modal-button" disabled={blocked} onClick={() => void run(api.restoreDatabase, '已准备恢复')}>从备份恢复</button>

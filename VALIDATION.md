@@ -1,5 +1,36 @@
 # Catpaw Harness 插件验证记录
 
+## 2026-11-02：v0.1.6 发布核对
+
+- 发布代码沿用已完成构建、类型检查、9 项同步流程测试及 10 项功能测试的版本。实际安装后的版本与本地 Catpaw、插件清单、安装包均为 `0.1.6`；记录见 `output/version-follow-verification.json`。
+- README 下载入口及安装示例更新为 `v0.1.6`。安装包与 SHA-256 校验文件通过 GitHub Release 分发。
+
+## 2026-11-02：插件版本持续跟随本地 Catpaw
+
+- `update:catpaw` 与 `pack:plugin` 共用本地同步、验证及打包流程，插件版本直接采用 Catpaw 版本；不再单独递增补丁号。默认读取本地 `package.json`，指定其他 Git 提交或标签时读取该提交版本。
+- 在临时 Git 项目中实际生成 `0.1.6` 与 `0.1.7` 安装包：即使提交号未变，版本号变化也会更新插件清单、锁文件、构建内版本和安装包文件名。另验证了只检查不修改、失败不出包、修复后重试、同版本源码更新、固定历史提交和无效版本拒绝。
+- 在实际项目运行 `npm run pack:plugin`，构建、类型检查、9 项同步流程测试和 10 项功能测试全部通过。完整日志：`output/version-follow-pack.log`。
+- 当前本地 Catpaw 为 `0.1.6`，生成 `output/dsh-catpaw-0.1.6.tgz`。Catpaw 原仓库保持原样；来源记录仍忠实保留已提交源码的 `0.1.3 / 5c703811c179…`。
+
+## 2026-11-02：插件版本统一为 0.1.6
+
+- 按本地 Catpaw 版本号，将插件 package.json、依赖锁文件及当前安装说明统一为 0.1.6。界面与后台版本从同一份项目版本信息读取。
+- 保留已验证的 Catpaw 源码提交和原始版本记录，避免把未提交的上游版本号写成源码来源。
+- 重新运行 `npm run check`：构建、类型检查、6 项同步流程测试和 10 项功能测试全部通过。后台版本检查随当前项目版本验证为 0.1.6。日志：`output/release-v0.1.6-check.log`。
+- 本地安装包为 `output/dsh-catpaw-0.1.6.tgz`；尚未发布新的 GitHub Release。
+
+## 2026-11-02：本地 Catpaw 跟进流程与 0.1.1 候选
+
+- 沿用 vendor 源码快照与 Harness 适配层；新增本地一键更新命令，不包含远程自动更新、GitHub 工作流或远程仓库修改。
+- 固定 Catpaw 已提交源码 5c703811c179c592ca1c602383def7f395bdeaf9。该提交内版本为 0.1.3；本地未提交的 0.1.6 版本号没有混入。Electron 更新为 44.9.3，DOMPurify 更新为 3.4.17。
+- 本地一键流程实际执行成功，完整构建、类型检查、6 项同步/流程测试和 10 项功能测试通过。覆盖错误来源、快照校验、接口差异、同步失败恢复、依赖分类、检查失败不打包、重试不重复增加版本。日志见 output/catpaw-update.log，结果见 output/catpaw-update-result.json。
+- 额外在隔离副本中使适配审核记录过期，检查按预期失败并指出 electron/main.ts。
+- 真实 Electron 后台验证全部接口覆盖、自动备份启动/手动执行/保留七份/重启持久化、Harness 模型共享额度、长文同意/拒绝/取消及跨客户端确认隔离。模型均为本地样本。
+- 使用更新前后台建立独立阅读库，再用新后台打开：文章数、已读和收藏保持不变，schema 为 22。证据为 output/upstream-upgrade-result.json。
+- 通过真实 Harness 0.2.1-rc.2 将候选包安装到 .dev/package-harness 的隔离配置，核对安装后的宿主、后台和界面文件与构建一致。首次 Electron 下载需使用已有环境代理，启用 NODE_USE_ENV_PROXY 后安装启动成功。正式 desktop 配置和阅读数据未修改。
+- 隐藏 Chrome 页面验证自动备份状态、立即备份、开关保存和目录选择提示的取消；验证浏览器内长文确认和取消，1 Token 上限确实阻止翻译。截图见 output/playwright/catpaw-update-backups.png、catpaw-update-model-confirmation.png。
+- 页面仅观察到本地 RSS 的外部 favicon 请求返回 404；未发现 Catpaw 页面运行异常。浏览器设置 10 分钟无操作自动退出，并在结束后关闭本轮会话及测试服务。
+
 ## 2026-11-02：v0.1.0 发布前检查
 
 - 在 macOS / Apple Silicon、Node.js 24.9.0、DeepSeek Harness 0.2.1-rc.2 环境重新执行 `npm run check`：构建、类型检查和全部 6 项测试通过，无失败或跳过。日志：`output/release-v0.1.0-check.log`。

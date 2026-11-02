@@ -1,3 +1,5 @@
+import { linuxDoFeeds } from './linuxdo';
+
 const RSSHUB_BASE_URL = (process.env.CATPAW_RSSHUB_BASE_URL || 'https://rsshub.app').replace(/\/+$/, '');
 const XIAOYUZHOU_FEED_BASE_URL = 'https://feed.xyzfm.space';
 const YOUTUBE_FEED_BASE_URL = 'https://www.youtube.com/feeds/videos.xml';
@@ -325,6 +327,8 @@ export function resolveWeChatBackfillUrlFromEntryLink(link: string | null | unde
 export function resolveFeedUrlFromInput(input: string) {
   const normalized = normalizeUrl(input);
   if (!normalized) return { url: input };
+  const linuxDo = linuxDoFeeds(normalized)[0];
+  if (linuxDo) return { url: linuxDo.url, siteUrl: linuxDo.siteUrl };
   const preferred = resolvePreferredFetchUrl(normalized, normalized);
   if (preferred !== normalized) {
     return { url: preferred, siteUrl: normalized };

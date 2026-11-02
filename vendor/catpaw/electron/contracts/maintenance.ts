@@ -9,6 +9,7 @@ export type MaintenanceInputs = {
   preview: OpmlInput;
   import: OpmlInput;
   backup: { path: string };
+  automaticBackup: { id: string; directory: string | null };
   validate: { path: string };
   restore: { path: string; mode?: 'normal' | 'unreadable' };
   applyRestore: undefined;
@@ -18,6 +19,7 @@ export type MaintenanceOutputs = {
   preview: OpmlPreviewSummary;
   import: OpmlPreviewSummary & { groupCount: number; feedCount: number; feedIds: string[] };
   backup: BackupSummary & { ok: true; filePath: string };
+  automaticBackup: BackupSummary & { ok: true; filePath: string };
   validate: BackupSummary;
   restore: BackupSummary & { ok: true; rollback: string };
   applyRestore: boolean;
@@ -45,5 +47,5 @@ export function validMaintenanceValue(kind: MaintenanceKind, value: unknown): bo
     if (!['newGroupCount', 'reusedGroupCount', 'newFeedCount', 'existingFeedCount', 'duplicateFeedCount', 'invalidFeedCount'].every(count)) return false;
     return kind === 'preview' || (count('groupCount') && count('feedCount') && Array.isArray(v.feedIds) && v.feedIds.every((id) => typeof id === 'string' && id.length > 0));
   }
-  return ['version', 'feeds', 'entries'].every(count) && (kind === 'validate' || (v.ok === true && typeof v[kind === 'backup' ? 'filePath' : 'rollback'] === 'string'));
+  return ['version', 'feeds', 'entries'].every(count) && (kind === 'validate' || (v.ok === true && typeof v[kind === 'backup' || kind === 'automaticBackup' ? 'filePath' : 'rollback'] === 'string'));
 }

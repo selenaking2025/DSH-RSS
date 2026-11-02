@@ -4,6 +4,8 @@ import { generateArticleSummary } from '../services/generate-article-summary';
 import { SummaryError, type ArticleSummaryResult } from '../contracts/article-summary';
 import { ModelTextError } from '../services/model-text';
 import { ModelProviderError } from '../contracts/model-providers';
+import { ModelUsageError } from '../contracts/model-usage';
+import { confirmModelRequests } from './confirm-model-requests';
 
 const requests = new Map<number, { requestId: string; controller: AbortController }>();
 export function stopArticleSummaries() {
@@ -25,13 +27,14 @@ export function registerSummaryHandlers() {
     const cancel = () => request.controller.abort();
     event.sender.once('destroyed', cancel);
     try {
-      const analysis = await generateArticleSummary(input, request.controller.signal);
+      const analysis = await generateArticleSummary(input, request.controller.signal,
+        (count) => confirmModelRequests(event.sender, '摘要', count, request.controller.signal));
       request.controller.signal.throwIfAborted();
       return { ok: true, analysis };
     } catch (error) {
       if (request.controller.signal.aborted) return { ok: false, code: 'CANCELLED', error: '摘要生成已取消。' };
       return { ok: false, code: error instanceof SummaryError ? error.code : 'FAILED',
-        error: error instanceof SummaryError || error instanceof ModelTextError || error instanceof ModelProviderError
+        error: error instanceof SummaryError || error instanceof ModelTextError || error instanceof ModelProviderError || error instanceof ModelUsageError
           ? error.message : '生成摘要失败，请稍后重试。已有摘要已保留。' };
     } finally {
       event.sender.removeListener('destroyed', cancel);

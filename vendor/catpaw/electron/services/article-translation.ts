@@ -59,9 +59,7 @@ async function translateCompleteBatch(target: TranslationTarget, texts: string[]
   }
 }
 
-export async function translateArticleTexts(target: TranslationTarget, texts: string[], language: TranslationLanguage,
-  signal: AbortSignal, onProgress: (completed: number, total: number) => void = () => {}) {
-  validateTranslationTexts(texts);
+export function splitTranslationBatches(texts: string[]): string[][] {
   const batches: string[][] = [];
   let batch: string[] = [], size = 0;
   for (const text of texts) {
@@ -69,6 +67,13 @@ export async function translateArticleTexts(target: TranslationTarget, texts: st
     batch.push(text); size += text.length;
   }
   if (batch.length) batches.push(batch);
+  return batches;
+}
+
+export async function translateArticleTexts(target: TranslationTarget, texts: string[], language: TranslationLanguage,
+  signal: AbortSignal, onProgress: (completed: number, total: number) => void = () => {}) {
+  validateTranslationTexts(texts);
+  const batches = splitTranslationBatches(texts);
   return withRequestBudget({ deadlineAt: Date.now() + 6 * 60_000 }, async () => {
     const translated: string[] = [];
     onProgress(0, batches.length);

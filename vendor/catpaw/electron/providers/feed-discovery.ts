@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { fetchWithTimeout } from '../network/http';
 import { resolveFeedUrlFromInput } from '../sources/rsshub';
+import { linuxDoFeeds } from '../sources/linuxdo';
 
 const DISCOVERY_TIMEOUT_MS = 12_000;
 const MAX_DISCOVERY_DOCUMENT_LENGTH = 2 * 1024 * 1024;
@@ -126,6 +127,9 @@ export async function discoverFeeds(input: string): Promise<{
   warning?: string;
 }> {
   const siteUrl = normalizeHttpUrl(input);
+  const linuxDo = linuxDoFeeds(siteUrl);
+  if (linuxDo.length) return { ok: true, siteUrl,
+    candidates: linuxDo.map((feed) => ({ ...feed, source: 'known-platform' as const })) };
   const resolved = resolveFeedUrlFromInput(siteUrl);
   if (resolved.url !== siteUrl) {
     return {

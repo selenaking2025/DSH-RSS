@@ -17,6 +17,11 @@ function download(name: string, value: BlobPart, type: string) {
 }
 
 export function installFileActions(bridge: ReturnType<typeof createBridge>, confirm: (question: { title: string; detail: string; confirmLabel?: string }) => Promise<boolean>) {
+  bridge.rss.chooseAutomaticBackupDirectory = async () => {
+    if (!await confirm({ title: '选择备份目录', confirmLabel: '打开目录选择窗口',
+      detail: '目录选择窗口会在运行 Harness 的电脑上打开。请在那台电脑上选择备份目录；远程浏览器所在设备的目录不会被使用。' })) return bridge.rss.getAutomaticBackupStatus();
+    return bridge.request('chooseAutomaticBackupDirectory') as ReturnType<RssBridge['chooseAutomaticBackupDirectory']>;
+  };
   const previews = new Map<string, { xml: string; name: string; expires: number }>();
   bridge.rss.previewOpml = async options => {
     let token = options?.token;
@@ -67,7 +72,7 @@ export function installFileActions(bridge: ReturnType<typeof createBridge>, conf
       }
       const preview = await bridge.request('validateRestore', [id]);
       if (!isRecord(preview) || !Number.isSafeInteger(preview.feeds) || !Number.isSafeInteger(preview.entries)) throw new Error('备份校验失败。');
-      if (!await confirm({ title: '恢复备份', confirmLabel: '恢复并重新载入', detail: `恢复「${file.name}」？\n包含 ${preview.feeds} 个订阅源、${preview.entries} 篇文章。\n当前数据会先保存为回滚备份，随后重新启动 Catpaw 后台。` })) return { ok: false, error: 'CANCELLED' };
+      if (!await confirm({ title: '恢复备份', confirmLabel: '恢复并重新载入', detail: `恢复「${file.name}」？\n包含 ${preview.feeds} 个订阅源、${preview.entries} 篇文章。\n整个阅读库将回到备份时的状态，包括此后的新增文章和阅读操作。当前数据会先保存为回滚备份，随后重新启动 Catpaw 后台。` })) return { ok: false, error: 'CANCELLED' };
       await bridge.request('commitRestore', [id]); committed = true;
       return { ok: true };
     } finally {

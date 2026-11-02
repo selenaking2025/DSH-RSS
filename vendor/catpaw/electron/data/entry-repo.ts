@@ -5,13 +5,36 @@ import type { Entry, EntryListItem, EntryCursor } from '../contracts/reader';
 export type { EntryCursor } from '../contracts/reader';
 import { assertFeedSyncTarget, type FeedSyncTarget } from './feed-sync-repo';
 
+// Bound source-controlled text before trimming, hashing, indexing or copying it.
+export const MAX_ENTRY_TEXT_BYTES = 2 * 1024 * 1024;
+const IDENTITY_FINGERPRINT_PREFIX = 'identity:';
+
+function assertEntryTextSize(value: string) {
+  if (value.length > MAX_ENTRY_TEXT_BYTES || Buffer.byteLength(value, 'utf8') > MAX_ENTRY_TEXT_BYTES) {
+    throw new Error('ENTRY_TEXT_TOO_LARGE');
+  }
+}
+
 function stripHtml(html: string) {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor < html.length) {
+    const start = html.indexOf('<', cursor);
+    if (start === -1) break;
+    const end = html.indexOf('>', start + 1);
+    // Keep an unclosed suffix as text, without rescanning it for every '<'.
+    if (end === -1) break;
+    parts.push(html.slice(cursor, start), ' ');
+    cursor = end + 1;
+  }
+  parts.push(html.slice(cursor));
+  return parts.join('').replace(/\s+/g, ' ').trim();
 }
 
 function coerceTextValue(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   if (typeof value === 'string') {
+    assertEntryTextSize(value);
     const normalized = value.trim();
     return normalized || null;
   }
@@ -82,9 +105,6 @@ export function upsertEntry(input: {
   mediaUrl?: string | null;
   mediaType?: string | null;
 }) {
-  const database = getDb();
-  return measureTransaction(() => database.transaction(() => {
-  if (input.syncTarget) assertFeedSyncTarget(database, input.syncTarget, input.feedId);
   const guid = coerceTextValue(input.guid);
   const title = coerceTextValue(input.title);
   const link = coerceTextValue(input.link);
@@ -103,6 +123,15 @@ export function upsertEntry(input: {
     summary: summaryText,
     contentText,
   });
+  // Reused GUIDs/links cannot be unique individually. Preserve their complete
+  // identity separately from the content hash so corrections keep the same row.
+  const identityFingerprint = guid && link
+    ? IDENTITY_FINGERPRINT_PREFIX + createHash('sha256').update(JSON.stringify([guid, link])).digest('hex')
+    : null;
+
+  const database = getDb();
+  return measureTransaction(() => database.transaction(() => {
+  if (input.syncTarget) assertFeedSyncTarget(database, input.syncTarget, input.feedId);
 
   type ExistingEntryRow = {
     id: string;
@@ -132,41 +161,32 @@ export function upsertEntry(input: {
   const byFingerprint = fingerprint
     ? (database.prepare(`${selectBase} WHERE feed_id = ? AND fingerprint = ?`).get(input.feedId, fingerprint) as ExistingEntryRow | undefined)
     : undefined;
+  const byIdentity = identityFingerprint
+    ? (database.prepare(`${selectBase} WHERE feed_id = ? AND fingerprint = ?`).get(input.feedId, identityFingerprint) as ExistingEntryRow | undefined)
+    : undefined;
 
-  let existing: ExistingEntryRow | undefined;
-  let unstableGuid = false;
-  let unstableLink = false;
-
-  if (byLink && byGuid && byLink.id !== byGuid.id) {
-    unstableGuid = Boolean(guid);
-    unstableLink = Boolean(link);
+  function isCompatible(candidate: ExistingEntryRow) {
+    return (!guid || !candidate.guid || candidate.guid === guid)
+      && (!link || !candidate.link || candidate.link === link)
+      // A missing downgraded key is not permission to merge a different pair.
+      && (!guid || !link || !candidate.fingerprint?.startsWith(IDENTITY_FINGERPRINT_PREFIX)
+        || candidate.fingerprint === identityFingerprint);
   }
 
-  if (byLink && !unstableLink) {
-    if (guid && byLink.guid && byLink.guid !== guid) {
-      unstableLink = true;
-    } else {
-      existing = byLink;
-    }
-  }
+  let existing = byIdentity;
+  if (!existing && byLink && isCompatible(byLink)) existing = byLink;
+  if (!existing && byGuid && isCompatible(byGuid)) existing = byGuid;
+  if (!existing && !byLink && !byGuid && byFingerprint && isCompatible(byFingerprint)) existing = byFingerprint;
 
-  if (!existing && byGuid && !unstableGuid) {
-    if (link && byGuid.link && byGuid.link !== link) {
-      unstableGuid = true;
-    } else if (byLink && byLink.id !== byGuid.id) {
-      unstableGuid = true;
-    } else {
-      existing = byGuid;
-    }
-  }
-
-  if (!existing && byFingerprint && !unstableGuid && !unstableLink) {
-    const guidCompatible = !guid || !byFingerprint.guid || byFingerprint.guid === guid;
-    const linkCompatible = !link || !byFingerprint.link || byFingerprint.link === link;
-    if (guidCompatible && linkCompatible) {
-      existing = byFingerprint;
-    }
-  }
+  // Resolve ownership inside the immediate transaction for inserts AND updates.
+  // In particular, do not refill a downgraded key owned by another article.
+  const unstableGuid = Boolean(byGuid && byGuid.id !== existing?.id);
+  const unstableLink = Boolean(byLink && byLink.id !== existing?.id);
+  const savedGuid = unstableGuid ? null : guid;
+  const savedLink = unstableLink ? null : link;
+  const savedFingerprint = unstableGuid || unstableLink || (byFingerprint && byFingerprint.id !== existing?.id)
+    ? identityFingerprint
+    : fingerprint;
 
   if (existing) {
     // A sparser mirror (common during history backfill, which deliberately walks
@@ -201,14 +221,14 @@ export function upsertEntry(input: {
       )
       .run(
         mergedTitle,
-        guid,
-        link,
+        savedGuid,
+        savedLink,
         mergedAuthor,
         mergedPublishedAt,
         mergedSummary,
         mergedContentHtml,
         mergedContentText,
-        fingerprint,
+        savedFingerprint,
         mediaUrl,
         mediaType,
         existing.id,
@@ -218,7 +238,7 @@ export function upsertEntry(input: {
   }
 
   if (unstableGuid || unstableLink) {
-    console.warn('[rss] entry identity conflict detected; inserting with downgraded keys', {
+    console.warn('[rss] entry identity conflict detected; preserving a stable identity fingerprint', {
       feedId: input.feedId,
       guid,
       link,
@@ -235,73 +255,25 @@ export function upsertEntry(input: {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
-  let insertGuid = unstableGuid ? null : guid;
-  let insertLink = unstableLink ? null : link;
-  let insertFingerprint = unstableGuid || unstableLink ? null : fingerprint;
-
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const id = randomUUID();
-    const createdAt = Date.now();
-    try {
-      insertStatement.run(
-        id,
-        input.feedId,
-        insertGuid,
-        title,
-        insertLink,
-        author,
-        input.publishedAt ?? null,
-        summaryText,
-        contentHtml,
-        contentText,
-        insertFingerprint,
-        mediaUrl,
-        mediaType,
-        createdAt,
-      );
-      updateEntryFts(id, title, summaryText, contentText);
-      return id;
-    } catch (error) {
-      if (!(error instanceof Error) || !/UNIQUE constraint failed: entries\.feed_id, entries\.(guid|link|fingerprint)/i.test(error.message)) {
-        throw error;
-      }
-
-      const message = error.message;
-      const guidConflict = /entries\.feed_id,\s*entries?\.guid/i.test(message);
-      const linkConflict = /entries\.feed_id,\s*entries?\.link/i.test(message);
-      const fingerprintConflict = /entries\.feed_id,\s*entries?\.fingerprint/i.test(message);
-      let changed = false;
-
-      if (guidConflict && insertGuid !== null) {
-        insertGuid = null;
-        changed = true;
-      }
-      if (linkConflict && insertLink !== null) {
-        insertLink = null;
-        changed = true;
-      }
-      if (fingerprintConflict && insertFingerprint !== null) {
-        insertFingerprint = null;
-        changed = true;
-      }
-
-      if ((guidConflict || linkConflict) && insertFingerprint !== null) {
-        insertFingerprint = null;
-        changed = true;
-      }
-
-      if (!changed && (insertGuid !== null || insertLink !== null || insertFingerprint !== null)) {
-        insertGuid = null;
-        insertLink = null;
-        insertFingerprint = null;
-        changed = true;
-      }
-
-      if (!changed) throw error;
-    }
-  }
-
-  throw new Error('ENTRY_INSERT_RETRY_EXHAUSTED');
+  const id = randomUUID();
+  insertStatement.run(
+    id,
+    input.feedId,
+    savedGuid,
+    title,
+    savedLink,
+    author,
+    input.publishedAt ?? null,
+    summaryText,
+    contentHtml,
+    contentText,
+    savedFingerprint,
+    mediaUrl,
+    mediaType,
+    Date.now(),
+  );
+  updateEntryFts(id, title, summaryText, contentText);
+  return id;
   }).immediate());
 }
 
@@ -484,11 +456,12 @@ export function markEntryContentFetchResult(
 }
 
 export function updateEntryContent(id: string, contentHtml: string, options?: { markFetched?: boolean; fetchedAt?: number | null }) {
-  const database = getDb();
-  measureTransaction(() => database.transaction(() => {
+  assertEntryTextSize(contentHtml);
   const contentText = contentHtml ? stripHtml(contentHtml) : null;
   const summaryText = contentText ? contentText.slice(0, 280) : null;
   const fetchedAt = options?.fetchedAt ?? Date.now();
+  const database = getDb();
+  measureTransaction(() => database.transaction(() => {
   database
     .prepare(
       `UPDATE entries

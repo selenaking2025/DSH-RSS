@@ -10,6 +10,7 @@ import { getThemePreference, saveThemePreference } from '../../.generated/catpaw
 import { exportOpml } from '../../.generated/catpaw/electron/services/opml';
 import { getDb } from '../../.generated/catpaw/electron/data/db-core';
 import { isRecord } from '../shared/protocol.ts';
+import { PLUGIN_VERSION, CATPAW_SOURCE } from '../shared/version.ts';
 
 export function registerDataHandlers() {
   const uploads = new Map<string, { owner: number; path: string; size: number; received: number; validated: boolean; expires: number; busy: boolean }>();
@@ -23,7 +24,7 @@ export function registerDataHandlers() {
   ipcMain.handle('rss:setThemePreference', (_event, preference) => {
     saveThemePreference(preference); nativeTheme.themeSource = preference; return preference;
   });
-  ipcMain.handle('rss:getAppStatus', () => ({ version: '0.1.0', electron: process.versions.electron,
+  ipcMain.handle('rss:getAppStatus', () => ({ version: PLUGIN_VERSION, upstream: CATPAW_SOURCE, electron: process.versions.electron,
     schema: CURRENT_SCHEMA_VERSION, packaged: true }));
   ipcMain.handle('rss:rebuildSearchIndex', () => runMaintenance('rebuild', undefined));
   // File selection and download live in the browser; these explicit methods carry only file bytes.
@@ -52,7 +53,7 @@ export function registerDataHandlers() {
       return { filename: 'catpaw-backup.sqlite3', base64: bytes.toString('base64') };
     } finally { await rm(path, { force: true }); }
   });
-  registerExtra('diagnostics', async () => ({ schema: CURRENT_SCHEMA_VERSION, pluginVersion: '0.1.0',
+  registerExtra('diagnostics', async () => ({ schema: CURRENT_SCHEMA_VERSION, pluginVersion: PLUGIN_VERSION, upstream: CATPAW_SOURCE,
     counts: getDb().prepare('SELECT (SELECT COUNT(*) FROM feeds) AS feeds, (SELECT COUNT(*) FROM entries) AS entries').get(),
     runtime: { platform: process.platform, arch: process.arch, electron: process.versions.electron } }));
   registerExtra('beginRestore', async (event, args) => {

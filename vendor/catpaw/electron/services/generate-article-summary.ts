@@ -2,12 +2,14 @@ import { getEntry } from '../data/entry-repo';
 import { findArticleSummary, saveArticleSummary } from '../data/article-summary-repo';
 import { SummaryError, type ArticleSummary, type SummarizeArticleInput } from '../contracts/article-summary';
 import { modelProviderStore } from './model-provider-store';
-import { summarizeArticleText } from './article-summary';
+import { summarizeArticleText, summaryRequestCount } from './article-summary';
+import type { ConfirmModelRequests } from '../contracts/model-usage';
 import { runWithStorageWriteRetry } from './sqlite-retry';
 import { readerJobManager } from '../reader-job-manager';
 import { getPlaywrightProfileDir } from '../runtime';
 
-export async function generateArticleSummary(input: SummarizeArticleInput, signal: AbortSignal): Promise<ArticleSummary> {
+export async function generateArticleSummary(input: SummarizeArticleInput, signal: AbortSignal,
+  confirmRequests: ConfirmModelRequests): Promise<ArticleSummary> {
   signal.throwIfAborted();
   if (!input.regenerate) {
     const saved = findArticleSummary(input.entryId);
@@ -35,6 +37,8 @@ export async function generateArticleSummary(input: SummarizeArticleInput, signa
     prepared = await readerJobManager.enqueue({ kind: 'prepare_article_summary', entryId: input.entryId });
   }
   if (!prepared.ok) throw new SummaryError(prepared.error);
+  signal.throwIfAborted();
+  if (!await confirmRequests(summaryRequestCount(prepared.source.text))) throw new SummaryError('摘要生成已取消。', 'CANCELLED');
   signal.throwIfAborted();
   const summary = await summarizeArticleText({ ...provider, model, apiKey }, prepared.source, signal);
   const analysis: ArticleSummary = { summary, sourceKind: prepared.source.sourceKind, providerId: provider.id, model, savedAt: Date.now() };

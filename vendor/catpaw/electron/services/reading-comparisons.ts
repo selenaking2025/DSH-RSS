@@ -25,7 +25,7 @@ export function planReadingComparisons(candidate: ReadingCandidate, focus: Readi
   }
   peers.sort((a, b) => b.similarity - a.similarity || a.entry.id.localeCompare(b.entry.id));
   const selected = peers.slice(0, 3).map((item) => item.entry);
-  const previous = settings.trackProgress ? listReadingHistory(candidate.id)
+  const previous = settings.trackProgress ? listReadingHistory(focus, candidate.id)
     .map((entry) => ({ entry, similarity: readingSimilarity(`${candidate.title}\n${assessment.evidence.join('\n')}`, `${entry.title}\n${entry.excerpt}`) }))
     .filter((item) => item.similarity >= 0.12).sort((a, b) => b.similarity - a.similarity || (a.entry.kind === 'known' ? -1 : 1))[0]?.entry : undefined;
   const events = JSON.stringify(selected.map((entry) => [entry.id, entry.sourceHash]));
@@ -35,17 +35,17 @@ export function planReadingComparisons(candidate: ReadingCandidate, focus: Readi
 }
 
 export async function runReadingComparisons(candidate: ReadingCandidate, source: ReadingSource, target: DecisionTarget, revision: number,
-  plan: ReturnType<typeof planReadingComparisons>, call: DecisionCaller, signal: AbortSignal) {
+  plan: ReturnType<typeof planReadingComparisons>, callForEntries: (entryIds: string[]) => DecisionCaller, signal: AbortSignal) {
   const model = decisionCacheKey(target);
   if (plan.eventsChanged) for (const entry of plan.peers) {
     if (findReadingRelation(candidate.id, entry.id, model)) continue;
     const relation = await compareReadingEvent({ title: source.title, text: source.text.slice(0, 5000) },
-      { title: entry.title ?? '', text: entry.assessment!.evidence.join('\n') || entry.estimatedText.slice(0, 5000) }, call);
+      { title: entry.title ?? '', text: entry.assessment!.evidence.join('\n') || entry.estimatedText.slice(0, 5000) }, callForEntries([entry.id]));
     await runWithStorageWriteRetry('readingRelation', () => { signal.throwIfAborted();
       return saveReadingRelation(candidate.id, source.sourceHash, entry.id, entry.sourceHash!, model, relation.sameEvent, relation.confidence, false,
         { left: candidate.feedRevision, right: entry.feedRevision }); });
   }
-  const progress = plan.historyChanged ? plan.previous ? await compareReadingProgress(source, plan.previous, call) : null
+  const progress = plan.historyChanged ? plan.previous ? await compareReadingProgress(source, plan.previous, callForEntries([plan.previous.entryId])) : null
     : findReadingProgress(candidate.id, model);
   await runWithStorageWriteRetry('readingComparison', () => {
     signal.throwIfAborted(); if (decisionSettings.get().revision !== revision) return false;
