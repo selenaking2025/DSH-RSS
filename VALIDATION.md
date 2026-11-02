@@ -1,5 +1,37 @@
 # Catpaw Harness 插件验证记录
 
+## 2026-11-02：v0.1.0 发布前检查
+
+- 在 macOS / Apple Silicon、Node.js 24.9.0、DeepSeek Harness 0.2.1-rc.2 环境重新执行 `npm run check`：构建、类型检查和全部 6 项测试通过，无失败或跳过。日志：`output/release-v0.1.0-check.log`。
+- 核对 `package.json` 与 `package-lock.json` 的运行、开发和宿主依赖声明一致；发布源码包含现有的 Harness 0.2.1-rc.2 适配更新。
+- README 增加版本固定的 GitHub Release 安装包下载入口、桌面版界面安装步骤与命令行安装说明。界面文案与本机 0.2.1-rc.2 插件管理器文档及实现核对。
+- 本次自动检查使用隔离测试数据，不修改用户现有的阅读数据；现有真实在线验收范围见下方 2026-11-01 记录。
+
+## 2026-11-01：安装到现有桌面版并进行真实在线验收
+
+本机 Harness Desktop 和其附带 CLI 均为 `0.2.1-rc.2`。项目的 Harness 依赖已更新到此版本，Cordis 和 Schemastery 开发依赖与桌面运行时一致。没有使用版本豁免。
+
+- `npm run check`：构建、类型检查和全部 6 项测试通过，无失败或跳过。日志：`output/check-harness-0.2.1.log`。
+- 使用桌面版附带的 `dsh plugin --profile desktop add <本地安装包>` 安装 `dsh-catpaw@0.1.0`。逐项核对已安装的前端、宿主和后台文件，均与本次构建一致。
+- 桌面原生界面未开放自动操作权限；界面验收使用该桌面安装自带的 **同一份 0.2.1-rc.2 运行时**，启动 `catpaw-preview` Web 配置，加载 `desktop` 已安装的插件目录。未将独立开发环境的结果当作桌面原生界面验收。
+- 正式阅读数据位于 `~/.dsh/data/catpaw`。通过真实页面添加 `https://github.com/deepseek-ai/deepseek-harness/releases.atom`，命名为“DeepSeek Harness 官方发布”，成功抓取 10 篇文章。
+- 验证文章正文、当前订阅内搜索、无匹配搜索、已读状态和收藏。注意“全部未读”范围会排除已读文章；选中订阅后可搜索全部文章。
+- Catpaw 复用 Harness 原有的 `deepseek-account / deepseek-flash` 配置，实际完成一篇文章的中文摘要和分段全文翻译。模型输出来自真实服务；未复制或展示模型密钥。
+- 刷新页面并重新进入阅读器后，订阅、收藏、文章摘要和已保存译文仍可使用。
+- 在“Catpaw 阅读器接入验收”会话中，真实模型成功调用 `catpaw_list_feeds`、`catpaw_search_articles` 和 `catpaw_read_article`。展开工具详情核对了实际返回的文章 ID、标题、正文和来源链接；正文返回 `excerptOnly: false`。
+- `allowAgentWrites` 保持 `false`。安装前的桌面配置备份位于本项目 `.dev/desktop-profile-backup-20261101/`。
+
+截图：
+
+- `output/playwright/harness-0.2.1-live-reader.png`：真实文章、收藏、中文译文及摘要。
+- `output/playwright/harness-0.2.1-ai-tools.png`：Harness 对话及 Catpaw 工具调用。
+
+测试使用隐藏 Chrome 会话，设置 10 分钟无操作自动退出。结束后关闭测试浏览器和预览服务，使桌面应用可独占阅读数据库。
+
+本轮环境问题：首次依赖更新遇到磁盘空间不足，清理了本项目旧验收环境和失败安装中可重新生成的依赖后重装成功；首次 Electron 下载因未使用环境代理而失败，使用 `NODE_USE_ENV_PROXY=1` 完成官方运行时下载后完整重测通过。浏览器观察到一次 Harness 账号资料读取错误（`deepseek-account` 的 profile 请求返回 403），但真实模型列表、摘要、翻译和对话工具调用成功；未发现 Catpaw 的页面异常。
+
+## 2026-09-30 历史验收
+
 验证日期：2026 年 9 月 30 日（本机时区）。插件版本：0.1.0。
 
 ## 验证环境和数据范围

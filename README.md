@@ -2,9 +2,30 @@
 
 将 Catpaw 阅读器接入 DeepSeek Harness：在侧栏阅读 RSS，并让会话中的 AI 查询阅读资料。阅读页面与 AI 工具使用同一个后台和独立数据目录。插件包名称为 `dsh-catpaw`。
 
-这是本地可安装的 `0.1.0` 插件，适配 **DeepSeek Harness 0.2.0-rc.2**，已在独立的 Web 环境中验证。旧版 Harness 不在兼容范围内；详细验证记录见 [VALIDATION.md](VALIDATION.md)。
+当前版本为 **0.1.0**，适配 **DeepSeek Harness 0.2.1-rc.2**，已在 macOS / Apple Silicon 上验证。安装前可用 `dsh --version` 核对 Harness 版本；详细验证记录见 [VALIDATION.md](VALIDATION.md)。
 
-## 本地运行
+## 下载与安装
+
+**[下载插件安装包 dsh-catpaw-0.1.0.tgz](https://github.com/selenaking2025/DSH-RSS/releases/download/v0.1.0/dsh-catpaw-0.1.0.tgz)** · [查看发布说明与所有附件](https://github.com/selenaking2025/DSH-RSS/releases/tag/v0.1.0) · [所有版本](https://github.com/selenaking2025/DSH-RSS/releases)
+
+普通用户下载上面的 `.tgz` 文件即可，无需克隆仓库或自行构建。保留文件原样，不要解压；Release 页面自动生成的 **Source code** 是源码归档。
+
+### 在 Harness 桌面版中安装
+
+1. 安装并打开 **DeepSeek Harness 0.2.1-rc.2**。
+2. 下载 `dsh-catpaw-0.1.0.tgz`，保存到运行 Harness 的电脑上。
+3. 在 Harness 侧栏点击 **插件 → 添加插件**。
+4. 在 **包名或地址** 中粘贴安装包的完整路径，例如 `/Users/你的用户名/Downloads/dsh-catpaw-0.1.0.tgz`。macOS 可在 Finder 中选中文件，按 **⌥⌘C** 复制路径。
+5. 点击 **安装**，完成后点击 **立即启用**。如果界面提示需要重启，重新打开 Harness。
+6. 点击侧栏 **Catpaw**，通过添加按钮新建 RSS 订阅，或导入 OPML 订阅列表。
+
+若安装提示依赖脚本被拦截，核对界面实际列出的依赖后，点击 **允许这些脚本并重试**。首次使用可能需要下载 Electron 运行时，请保持网络可用。
+
+基础阅读不需要模型密钥。Harness 会话使用其已配置的模型，可以直接请求：“帮我查找 Catpaw 中关于 AI 的文章，并总结重点。”阅读页的摘要和翻译需按下文的[模型接入](#模型接入)配置；AI 默认只有查询权限。
+
+也可使用[下方的命令行安装方式](#从源码打包与命令行安装)。当前版本要求 Harness **0.2.1-rc.2**，不要对其他宿主版本强制放行版本检查。
+
+## 本地运行（开发者）
 
 需要 Node.js 24 或更新版本，以及 macOS 图形桌面环境。
 
@@ -30,21 +51,31 @@ npm run dev
 
 开发数据中使用的“Catpaw 本地验收订阅”和“本地验收模型”是测试样本。要重新抓取样本或生成测试译文，先分别启动上表中的本地服务；已有文章和缓存仍可直接阅读。正式安装的空数据目录不会自动添加这些样本。开发模式关闭自动刷新；正式插件遵循阅读器中的刷新设置。
 
-## 生成与安装插件包
+## 从源码打包与命令行安装
 
 ```sh
 npm run pack:plugin
 ```
 
-生成 `output/dsh-catpaw-0.1.0.tgz`。在 **0.2.0-rc.2** 的 Harness 插件管理器中安装此文件；不要对旧宿主强制放行版本检查。
+生成 `output/dsh-catpaw-0.1.0.tgz`。在 **0.2.1-rc.2** 的 Harness 插件管理器中安装此文件；不要对其他宿主版本强制放行版本检查。
 
-也可在已安装相同版本的 Harness CLI 环境中执行：
+已安装 Harness 桌面版时，使用桌面版附带的 `dsh` 命令安装到 `desktop` 配置：
+
+```sh
+dsh plugin --profile desktop add /绝对路径/dsh-catpaw-0.1.0.tgz
+```
+
+重新打开 Harness，点击侧栏 **Catpaw** 即可进入阅读器。点击添加按钮新建订阅源，或通过 OPML 导入订阅。桌面版的 `desktop` 配置由应用启动，不能用 `dsh --profile desktop` 启动。安装方式参见 [官方插件安装说明](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/develop/basic/publish.md)。
+
+独立 Web 版应安装到它实际使用的配置，例如：
 
 ```sh
 dsh plugin --profile web add /绝对路径/dsh-catpaw-0.1.0.tgz
 ```
 
-pnpm 会检查依赖的安装脚本。此插件的 Electron 运行时和 SQLite 依赖需要安装步骤；如安装界面列出待允许项，仅允许该次安装实际列出的 `electron`、`better-sqlite3` 等所需依赖后重试。不要全局放开所有安装脚本。本项目使用固定的 pnpm 11.7.0，`npm run dev` 自动优先使用它。
+此插件需要 Electron 运行时和 SQLite 原生组件。当前版本的 SQLite 包自带预编译组件，Electron 会在首次使用时下载运行时。若安装界面列出待允许的脚本，仅允许该次安装实际列出的所需依赖后重试，不要全局放开安装脚本。本项目使用固定的 pnpm 11.7.0，`npm run dev` 自动优先使用它；桌面版 CLI 使用应用自带的 pnpm。
+
+使用 `HTTP_PROXY` / `HTTPS_PROXY` 时，Node.js 的下载器可能需要显式启用环境代理。若首次测试提示 Electron 下载失败，可先执行 `NODE_USE_ENV_PROXY=1 node node_modules/electron/install.js`，完成后重跑测试。
 
 首版需要在运行 Harness 的电脑上启动一个独立 Electron 后台，以复用 Catpaw 的网页抓取和登录浏览器。它不会再打开一套阅读器窗口。微信登录会在该电脑上打开专用窗口；远程浏览器访问 Harness 时，登录窗口仍出现在服务器所在的桌面。尚未验证 Linux 无图形环境、Windows 和旧版 Harness。
 
